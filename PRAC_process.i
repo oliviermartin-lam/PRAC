@@ -1,4 +1,116 @@
 include, "PRAC_main.i";
+
+
+func listFile(path)
+{
+  include, "PRAC_config.i",1;
+  // definition of the file that will contain the list of the directory
+  ficlist = tmpDir+"lsList.txt";
+  // first, rm of the file (in order that it's not confused with a previous call)
+  system, "rm -f " + tmpDir + "dialogFile.txt " + ficlist + " > /dev/null 2>&1";
+  // file listing, in reverse time order
+  system, "ls -1tr " + path + "> " + ficlist + " 2> /dev/null ; echo $? > " + tmpDir + "dialogFile.txt";
+  // put permissions for all the newly created files
+  system_chmod,666,tmpDir+"dialogFile.txt";
+  system_chmod,666,ficlist;
+  // read the file to know if 'ls' got no error
+  str = rdfile( tmpDir+"dialogFile.txt" )(0);
+  if( str=="0" ) {
+    listdir = rdfile(ficlist);
+    return listdir;
+  } else {
+    return [];
+  }
+}
+
+func plotProfiles(void)
+/* DOCUMENT plotProfiles;
+  
+ */
+{
+  //initialiazing vectors...
+  cnh = alt = l0h = vh = dirh = [];//fitted values
+  dcnh = dalt = dl0h = dvh = ddirh = [];//uncertainties
+
+  listdir = listFile("profiles/");
+  ndir = numberof(listdir);
+  //managing directories
+  for(j=1;j<=ndir;j++){
+    dir      = listdir(j);
+    pathdata = "profiles/" + dir + "/";
+    listtl = listFile(pathdata);
+    ntl    = numberof(listtl);
+    dataDirRoot = dataDir + dir + "/";
+    write,format="Processing directory %s\n",dir;
+    //loop on file
+    for(i=1;i<=ntl;i++){
+      //determining the airmass
+      timetl = strpart(listtl(i),21:29);
+      restorefits,"slopestl",timetl,pathtl,fake=1;
+      object = strcase(1,readFitsKey(pathtl,"OBJECT"));
+      tmp = givesCoordinatesFromObject(object);
+      array_ra = str2flt(decoupe(tmp(1),' '));
+      array_dec = str2flt(decoupe(tmp(2),' '));
+      airm = airmassFromDate(extractDate(pathtl),array_ra,array_dec);
+      //growing results
+      ptrprof = readfits(pathdata + listtl(i));
+      cnh     = grow(cnh,*ptrprof(1)/airm);
+      alt     = grow(alt,*ptrprof(2)/airm);
+      l0h     = grow(l0h,*ptrprof(3));
+      track   = grow(track,*ptrprof(4));
+      vh      = grow(vh,*ptrprof(5));
+      dirh    = grow(dirh,*ptrprof(6));
+      dcnh    = grow(dcnh,*ptrprof(7)/airm);
+      dalt    = grow(dalt,*ptrprof(8)/airm);
+      dl0h    = grow(dl0h,*ptrprof(9));
+      dtrack  = grow(dtrack,*ptrprof(10));
+      dvh     = grow(dvh,*ptrprof(11));
+      ddirh   = grow(ddirh,*ptrprof(12));
+      
+      write,format="Loading file:%.3g%s\r",100.*i/ntl,"%";
+      
+    }
+  }
+  
+  write,format="%d processed files\n",numberof(cnh)/5;
+  alt    /= 1000;
+  l       = 500e-6;
+  cnh    *= 0.0598825*l*l;
+  dcnh   *= 0.0598825*l*l;
+  wa      = where(alt>=25);
+  alt(wa) = 25.;
+  w0 = where(l0h<100);
+  
+  //Plotting altitude versus cnh
+  winkill,0;window,0,dpi=90,style="aanda.gs";
+  plmk,alt,cnh,marker=4,msize=0.1;
+  //plmk,alt,cnh+dcnh,marker=4,msize=.1,color="red";
+  //plmk,alt,cnh-dcnh,marker=4,msize=.1,color="red";
+  range,-1,25;
+  limits,-1e-8,1e-6
+  xytitles,"C_n_^2^(h) (m^-2/3^) ","Altitude (km)";
+
+  //Plotting altitude versus l0h
+  winkill,1;window,1,dpi=90,style="aanda.gs";
+  plmk,alt(w0),l0h(w0),marker=4,msize=0.1;
+  range,-1,25;
+  limits,-5,100;
+  xytitles,"L_0_(h) (m) ","Altitude (km)";
+
+  //Plotting altitude versus l0h
+  winkill,2;window,2,dpi=90,style="aanda.gs";
+  plmk,alt,vh,marker=4,msize=0.1;
+  range,-1,25;
+  limits,-1,10
+  xytitles,"v(h) (m/s) ","Altitude (km)";
+
+  //Plotting altitude versus dirh
+  winkill,3;window,3,dpi=90,style="aanda.gs";
+  plmk,alt,dirh,marker=4,msize=0.1;
+  range,-1,25;
+  xytitles,"!a(h) (degree) ","Altitude (km)";
+}
+
 /*
  _____ ____  ____   ___  ____  
 | ____|  _ \|  _ \ / _ \|  _ \ 
