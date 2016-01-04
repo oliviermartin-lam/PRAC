@@ -74,39 +74,95 @@ func plotProfiles(void)
   
   write,format="%d processed files\n",numberof(cnh)/5;
   alt    /= 1000;
-  l       = 500e-6;
+  //computing integrated value
+  cnh0 = l0eff = v0 = [];
+  for(i=1;i<=numberof(cnh)/5;i++){
+    cnhi   = cnh(1+(i-1)*5:5*i);
+    cnh0   = grow(cnh0,0.103/sum(cnhi)^(-3/5.));
+    l0eff  = ((l0h(1+(i-1)*5:5*i)^(5/3.)*cnhi)/sum(cnhi))^(3/5.);
+    v0     = ((vh(1+(i-1)*5:5*i)^(5/3.)*cnhi)/sum(cnhi))^(3/5.);
+  }
+
   cnh     = 0.103/cnh^(-3/5.);
   dcnh    = 0.103*3/5.*dcnh/cnh^(2/5.); 
   wa      = where(alt>=20);
   alt(wa) = 20.;
-  w0 = where(l0h<=100);
-  write,format="%.3g%s of jerk outer scale\n",100.*numberof(w0)/numberof(l0h),"%s";
+  w0 = where(l0h<=40);
+  write,format="%.3g%s of jerk outer scale\n",100.*(1.- double(numberof(w0))/numberof(l0h)),"%s";
   //Plotting altitude versus cnh
   winkill,0;window,0,dpi=90,style="aanda.gs";
   plmk,alt,cnh,marker=4,msize=0.1;
   range,-1,25;
   limits,0,2.;
-  xytitles,"Seeing at 500 nm (arcsec) ","Altitude (km)";
+  xytitles,"Seeing at 500 nm (arcsec)","Altitude (km)";
+  pdf, "cnh_profile.pdf";
 
+  //Plotting seeing histograms
+  winkill,4;window,4,dpi=90,style="aanda.gs";
+  res = .05;
+  w1 = where(cnh0 <=2.);
+  ns = int(minmax(cnh0(w1))(dif)(1)/res-1.);
+  histo,cnh0(w1),ns;
+  histo,cnh(where(alt == 0 & cnh<=2.)),ns;
+  histo,cnh(where(alt >0 & cnh<=2.)),ns;
+  xytitles,"Seeing at 500 nm (arcsec)","Counts";
+  lim = limits();
+  plt,"A: Global seeing",lim(2)/2,lim(4)/2,tosys=1;
+  plt,"B: Ground value ",lim(2)/2,lim(4)/2-lim(4)/8,tosys=1;
+  plt,"C: Altitude value",lim(2)/2,lim(4)/2-lim(4)/4,tosys=1;
+  pdf, "cnh_histo.pdf";
+  
   //Plotting altitude versus l0h
   winkill,1;window,1,dpi=90,style="aanda.gs";
   plmk,alt(w0),l0h(w0),marker=4,msize=0.1;
   range,-1,25;
-  limits,-5,100;
-  xytitles,"L_0_(h) (m) ","Altitude (km)";
+  limits,-5,40;
+  xytitles,"L_0_(h) (m)","Altitude (km)";
+  pdf, "L0h_profile.pdf";
 
+  //Plotting outer scale histograms
+  winkill,5;window,5,dpi=90,style="aanda.gs";
+  res = .1;
+  w0 = where(l0eff<=40);
+  ns = int(minmax(l0eff(w0))(dif)/res-1.);
+  histo,l0eff(w0),ns;
+  histo,l0h(where(alt == 0 & l0h<=40)),ns;
+  histo,l0h(where(alt > 0 & l0h<=40)),ns;
+  xytitles,"Outer scale (m)","Counts";
+  lim = limits();
+  plt,"A: Effective outer scale",lim(2)/2,lim(4)/2,tosys=1;
+  plt,"B: Ground value ",lim(2)/2,lim(4)/2-lim(4)/8,tosys=1;
+  plt,"C: Altitude value",lim(2)/2,lim(4)/2-lim(4)/4,tosys=1;
+  pdf, "l0h_histo.pdf";
+  
   //Plotting altitude versus l0h
   winkill,2;window,2,dpi=90,style="aanda.gs";
   plmk,alt,vh,marker=4,msize=0.1;
   range,-1,25;
   limits,-1,10;
-  xytitles,"v(h) (m/s) ","Altitude (km)";
+  xytitles,"v(h) (m/s)","Altitude (km)";
+  pdf, "vh_profile.pdf";
 
+  //Plotting seeing histograms
+  w2 = where(vh<=20);
+  winkill,6;window,6,dpi=90,style="aanda.gs";
+  res = .5;
+  ns = int(minmax(vh(w2))(dif)/res-1.);
+  histo,vh(w2),ns;
+  histo,vh(where(alt == 0 & vh<=30)),ns;
+  histo,vh(where(alt > 0 & vh<=30)),ns;
+  xytitles,"Wind speed (m/s)","Counts";
+  lim = limits();
+  plt,"A: Temporal coherence wind velocity",lim(2)/2,lim(4)/2,tosys=1;
+  plt,"B: Ground value ",lim(2)/2,lim(4)/2-lim(4)/8,tosys=1;
+  plt,"C: Altitude value",lim(2)/2,lim(4)/2-lim(4)/4,tosys=1;
+  pdf, "vh_histo.pdf";
+  
   //Plotting altitude versus dirh
   winkill,3;window,3,dpi=90,style="aanda.gs";
   plmk,alt,dirh,marker=4,msize=0.1;
   range,-1,25;
-  xytitles,"!a(h) (degree) ","Altitude (km)";
+  xytitles,"!a(h) (degree)","Altitude (km)";
 }
 
 /*
