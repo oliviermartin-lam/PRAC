@@ -75,20 +75,18 @@ func plotProfiles(void)
   write,format="%d processed files\n",numberof(cnh)/5;
   alt    /= 1000;
   l       = 500e-6;
-  cnh    *= 0.0598825*l*l;
-  dcnh   *= 0.0598825*l*l;
-  wa      = where(alt>=25);
-  alt(wa) = 25.;
-  w0 = where(l0h<100);
-  
+  cnh     = 0.103/cnh^(-3/5.);
+  dcnh    = 0.103*3/5.*dcnh/cnh^(2/5.); 
+  wa      = where(alt>=20);
+  alt(wa) = 20.;
+  w0 = where(l0h<=100);
+  write,format="%.3g%s of jerk outer scale\n",100.*numberof(w0)/numberof(l0h),"%s";
   //Plotting altitude versus cnh
   winkill,0;window,0,dpi=90,style="aanda.gs";
   plmk,alt,cnh,marker=4,msize=0.1;
-  //plmk,alt,cnh+dcnh,marker=4,msize=.1,color="red";
-  //plmk,alt,cnh-dcnh,marker=4,msize=.1,color="red";
   range,-1,25;
-  limits,-1e-8,1e-6
-  xytitles,"C_n_^2^(h) (m^-2/3^) ","Altitude (km)";
+  limits,0,2.;
+  xytitles,"Seeing at 500 nm (arcsec) ","Altitude (km)";
 
   //Plotting altitude versus l0h
   winkill,1;window,1,dpi=90,style="aanda.gs";
@@ -101,7 +99,7 @@ func plotProfiles(void)
   winkill,2;window,2,dpi=90,style="aanda.gs";
   plmk,alt,vh,marker=4,msize=0.1;
   range,-1,25;
-  limits,-1,10
+  limits,-1,10;
   xytitles,"v(h) (m/s) ","Altitude (km)";
 
   //Plotting altitude versus dirh

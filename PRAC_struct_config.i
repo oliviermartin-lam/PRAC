@@ -146,8 +146,8 @@ func define_dm(pathdata,verb=)
   data.dm.x0 = sqrt(-2/log(couplage)) / nssp;
   
   if(verb){
-    write,format="Nber of actuators through diam : %d\n",data.dm.ndiam;
-    write,format="Total number of actuators      : %d\n",data.dm.nactu;
+    //write,format="Nber of actuators through diam : %d\n",data.dm.ndiam;
+    //write,format="Total number of actuators      : %d\n",data.dm.nactu;
   }
   
 }
@@ -182,6 +182,9 @@ func define_rtc(pathdata,verb=)
     //unbiases the reconstructor from sensitivities
     R =  unbiasesMtFromSensitivities(R);
     data.rtc.R = &R;
+    if(verb){
+      write,format="Calibration time of the reconstructor : %s\n",strpart(suffmt,12:);
+    }
   }
   
   
@@ -265,9 +268,9 @@ func define_fourier(void,verb= )
   data.fourier.dactupix = km;
 
   if(verb){
-    write,format="Number of samples in dactu : %d\n", km;
-    write,format="ud                         : %f\n", data.fourier.ud;
-    write,format="champ_Dphi                 : %f\n", data.fourier.champ_Dphi;
+    //write,format="Number of samples in dactu : %d\n", km;
+    //write,format="ud                         : %f\n", data.fourier.ud;
+    //write,format="champ_Dphi                 : %f\n", data.fourier.champ_Dphi;
   }
 
   // size of the pixel of Wiener image (meters^-1)
@@ -350,7 +353,7 @@ func define_turbu(pathdata,verb=)
   data.uncertainties.dirh      = abs(*ptr_prof(12));
 
   w = where(data.learn.l0h >=100.);
-  // if(is_array(w)) data.learn.l0h(w) = 100.;
+  //if(is_array(w)) data.learn.l0h(w) = 100.;
     
   /*if(data.rtc.obsmode == "SCAO"){
     data.learn.nl          = 1;

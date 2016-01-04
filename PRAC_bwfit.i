@@ -152,9 +152,7 @@ func computeFittingWfit_DMsquare(Wiener, ndm, N,verb=)
   
   Wfit = Wiener;
   Wfit(ndm) = 0.0;
-  if(verb){
-      write,format="Fit error from Wiener spectrum = %.4g nm\n", psd2rms(Wfit);
-  }
+  
   return Wfit;
 }
 
@@ -188,18 +186,12 @@ func computeBpSpectrum(k,V,dir,Fe,tret,gain,BP,Wiener,northo,mode=,verb=)
     }else if(mode == "SCAO"){
       hcor = hcorScao(nu_l, Fe, tret, gain, BP);
     }
-    
-    Wbp +=  hcor * 0.023 * cnh(l) * (k^2 + 1./l0(l)^2.)^(-11/6.);
+    Wbp +=  abs(hcor) * 0.023 * cnh(l) * (k^2 + 1./l0(l)^2.)^(-11/6.);
   }
 
-  
   N = data.fourier.npix;
   Wbp(N/2+1,N/2+1) = 0;
   Wbp(northo) = 0.00;
-  
-  if(verb){
-    write,format="BW error from Wiener spectrum = %.4g nm\n", psd2rms(abs(Wbp));
-  }
 
   return Wbp;
 }

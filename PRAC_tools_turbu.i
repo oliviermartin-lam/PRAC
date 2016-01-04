@@ -34,13 +34,15 @@ func determineGlobalParameters(dataset,&p,&dp,arc=,verb=)
       w(k)   = getWindSpeed(dataset(slrange(p),),p);
       k++;
     }
-    tmp    = getWindFromCov(dataset(slrange(p),),delay,d1,d2,altlgs = data.wfs(p).lgsH);
-    v(p)   = tmp(1);
-    dir(p) = tmp(2);
-    dv(p)  = d1^2;
-    da(p)  = d2^2;
   }
 
+  //tmp = getWindFromCov(dataset,delay,d1,d2);
+  //v   = tmp(1);
+  //dir = tmp(2);
+  //dv  = d1^2;
+  //da  = d2^2;
+
+    
   //derivating global turbulence parameters
   r0 = median(tmpR0L0(,1));
   L0 = median(tmpR0L0(,2));
@@ -436,7 +438,6 @@ func getWindSpeed(s, icam )
       k=0;
   }
   tau0 = k / data.rtc.Fe;   // tau0 in seconds
-
   // windspeed
   size_ssp = data.tel.diam/data.wfs(icam).sX;
   if( tau0>0 )
@@ -446,10 +447,9 @@ func getWindSpeed(s, icam )
   return windspeed;
 }
 
-func getWindFromCov(s,delay,&dv,&da,altlgs=)
+func getWindFromCov(s,delay,&dv,&da,verb=)
 {
   if(is_void(delay)){delay = .1;}//temporal delta in s
-  if(is_void(altlgs)) altlgs =0;
   s -= s(,avg);
 
   tau = int(delay*data.rtc.Fe)/data.rtc.Fe;
@@ -464,38 +464,46 @@ func getWindFromCov(s,delay,&dv,&da,altlgs=)
   //..... Fitting of the pupil shift .....//
   
   //managing intial guess
-  data.learn.nl = 1.;
-  data.learn.altitude = 0.;
-  if(data.learn.cnh(1) == 0){data.learn.cnh(1) = 20;}
-  if(data.learn.l0h(1) == 0){data.learn.l0h(1) = 10;}
+  tmptrack = data.learn.tracking;
+  data.learn.tracking = 0;
   //managing index fit
-  data.learn_fit.cnh(1) = 1;
-  data.learn_fit.l0h(1) = 0;
-  data.learn_fit.altitude(1) = 0;
-  data.learn_fit.xshift(1) = 1;
-  data.learn_fit.yshift(1) = 1;
+  data.learn_fit.cnh      = 0;
+  data.learn_fit.l0h      = 0;
+  data.learn_fit.altitude = 0;
+  data.learn_fit.xshift(*data.rtc.ptrlistOffAxisNgs) = 1;
+  data.learn_fit.yshift(*data.rtc.ptrlistOffAxisNgs) = 1;
+  data.learn.diagonal = 1;
   fitEstim = packcoeffs(data,indexFit);
   //fit the covariance
-  F = calc_TTMatFilt_1(data.wfs(data.its).nssp);
+  F = calc_TTMatFilt_1(data.Nslopes);
   Css =  (F(,+)*Css(+,))(,+) * F(+,);
   takesDiag(Css) = 0;
-  res = lmfit( covMat1WFS, data, fitEstim, Css, fit=indexFit, tol=1e-4,stdev=1);
+  
+  res = lmfit_Learn( covMatModel, data, fitEstim, Css, fit=indexFit, tol=1e-4,stdev=1,verb=verb);
   unpackcoeffs, fitEstim, cnh, alt,L0,tracking,xshift,yshift;
 
   //determining windspeed
-  vx  = xshift(1)/tau;
-  vy  = yshift(1)/tau;
+  ws = where(xshift!=0);
+  xs = xshift(ws);
+  ys = yshift(ws);
+  vx  = xs/tau;
+  vy  = ys/tau;
   v   = abs(vx,vy);
   dir = 180*atan(vy/vx)/pi;
 
   //computing uncertainties
-  sig = *res.stdev;
-  sig = sig(where(sig!=0));
-  dvx = sig(1)/tau;
-  dvy = sig(2)/tau;
-  dv  = abs(dvx,dvy);
-  da  = 180/pi * (vx*dvy + vy*dvx)/v^2;
-    
+  sig  = *res.stdev;
+  w    = where(sig!=0);
+  sig  = sig(w);
+  n    = numberof(w);
+  sigx = sig(1:n/2);
+  sigy = sig(n/2+1:);
+  dvx  = sigx/tau;
+  dvy  = sigy/tau;
+  dv   = abs(dvx,dvy);
+  da   = 180/pi * (vx*dvy + vy*dvx)/v^2;
+
+  data.learn.tracking = tmptrack;
   return [v,dir]
 }
 
@@ -534,9 +542,9 @@ func covMat1WFS(data,fitEstim)
 
   //removing the tip-tilt
   F = calc_TTMatFilt_1(data.wfs(data.its).nssp);
-  covMat =  (F(,+)*covMat(+,))(,+) * F(+,);
+  //covMat =  (F(,+)*covMat(+,))(,+) * F(+,);
   //nulifying the diagonal
-  takesDiag(covMat) = 0;
+  //takesDiag(covMat) = 0;
 
   return covMat;
 }
@@ -580,7 +588,7 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
   slopesdis = *data.slopes_dis;
   slopesdis -= slopesdis(,avg);
   
-  delay = array(.15,data.learn.nl);
+  delay = array(.1,data.learn.nl);
   delay(1) = .2;
   v_h = dir_h = dv_h = ddir_h = array(0.,nl);
   nwfs = data.nwfs;
@@ -606,7 +614,13 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
     slopes_hl = R_hl(,+)*slopesdis(+,);
 
     //Derivating the wind speed and directions
-    for(p=1; p<=nwfs; p++){
+    tmp    = getWindFromCov(slopes_hl,delay(l),d1,d2);
+    v(p)   = tmp(1);
+    dir(p) = tmp(2);
+    dv(p)  = d1^2;
+    da(p)  = d2^2;
+        
+        /*for(p=1; p<=nwfs; p++){
       if(data.wfs(p).type == 1){
         tmp    = getWindFromCov(slopes_hl(slrange(p),),delay(l),d1,d2);
         v(p)   = tmp(1);
@@ -614,7 +628,8 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
         dv(p)  = d1^2;
         da(p)  = d2^2;
       }
-    }
+      }*/
+        
     w   = where(v !=0);
     n   = numberof(w);
     v2   = v(w);
@@ -631,10 +646,10 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
   
   //Getting back to the intial data struct
   data.learn = learntmp;
-  data.learn.vh = v_h;
-  data.learn.dirh = dir_h;
-  data.uncertainties.vh = dv_h;
-  data.uncertainties.dirh = ddir_h;
+  data.learn.vh(1:nl) = v_h;
+  data.learn.dirh(1:nl) = dir_h;
+  data.uncertainties.vh(1:nl) = dv_h;
+  data.uncertainties.dirh(1:nl) = ddir_h;
   
   return [v_h,dir_h];
 }

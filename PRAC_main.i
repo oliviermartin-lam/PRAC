@@ -52,13 +52,8 @@ slopestl_2013-09-18_02h44m37s_script293_scao_moao0L3N_moao4l3n.fits
 */
 
 func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
-/*DOCUMENT p = PRAC_main("02h31m34s",verb=1,disp=0); p = PRAC_main("02h41m32s",verb=1,disp=1);
+/*DOCUMENT p = PRAC_main("02h31m34s",verb=1,disp=0); p = PRAC_main("02h30m48s",verb=1,disp=1);
  
-  to be done:
-  - correlation BW and TOMO to be fixed
-  - include vibration from data.learn.tracking
-  - noise modelization
-  - include a simulation mode
  */
 {
   extern NBWFS_DEF,NL_DEF;
@@ -97,7 +92,6 @@ func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
     if(is_void(geo)) geo = "square";
   
     DPHI_bwfit = compute_DphiBwFitting(data.turbu.r0ir, data.turbu.L0, data.turbu.v,data.turbu.dir,data.rtc.Fe,data.rtc.delay,data.rtc.gain,data.rtc.BP,geo,mode=data.rtc.obsmode,verb=verb);
-
     
     //...... Derivation of the OTF from static aberration except NCPA .....//
     OTF_stats_tmp = PRAC_OTF_stats(mca,PSF_stats);
@@ -176,7 +170,6 @@ func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
 
   //.... Error breakdown .....//
   data.budget.ncpa = sqrt(- (data.camir.lambda_ir*1e9/2/pi)^2 * log(SR_best));
-  if(verb) write,"Computing the error breakdown";
   PRAC_errorbreakdown,verb=verb;
 
   data.budget.SRsky = 100*SR_sky;

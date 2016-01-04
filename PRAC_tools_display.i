@@ -22,9 +22,8 @@ func displayLayers(cn2h,alt,xylabels,l0=,percent=,col=, thick=,strength_rms=)
   // getting profile data from tomo structure
   x = cn2h;
   if(!l0){
-    if(is_struct(data)) lambda_vis = data.lambda_vis
-    else lambda_vis = 500e-6;
-    x = 0.0598825*lambda_vis*lambda_vis*cn2h;
+    w = where(cn2h!=0);
+    x(w) =0.103/cn2h(w)^(-3/5.);
   }
   //x = cn2h;
   if(!sum(sign(cn2h)==-1) == numberof(cn2h))
@@ -80,7 +79,7 @@ func displayLayers(cn2h,alt,xylabels,l0=,percent=,col=, thick=,strength_rms=)
     if(percent){
       xytitles,"Relative contribution (%)","Altitude (km)";
     }else{
-      xytitles,"C_n_^2^(h)  (m^-2/3^) ","Altitude (km)";
+      xytitles,"Seeing at 500 nm  (arcsec) ","Altitude (km)";
     }
   }else{
     xytitles,xylabels(1),xylabels(2);

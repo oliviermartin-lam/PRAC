@@ -383,7 +383,7 @@ func Dij2covMat(dipl, djql, s1, s2, cnh_hl, hl, l0h_hl, altlgs1, altlgs2,p,q,low
   return caa;
 }
 
-func covMat1layer(nbWfs, l,cnh_hl, hl, l0h_hl,loworder=,singleWFS=,deriv=)
+func covMat1layer(nbWfs, l,cnh_hl, hl, l0h_hl,xshift,yshift,loworder=,singleWFS=,deriv=)
 /* DOCUMENT calcCaa_3(nbWfs, L0, r0, altitude)
      
    <nbWfs>      : scalar, number of wfss
@@ -406,7 +406,6 @@ func covMat1layer(nbWfs, l,cnh_hl, hl, l0h_hl,loworder=,singleWFS=,deriv=)
   //managing the outerscale
   l0h_hl = abs(l0h_hl);
 
-  //if((l0h_hl >= 1e2 || abs(hl) >= 50) && data.learn.l0hfit(l) == 0){
   if(l0h_hl >=100.){
     l0h_hl = 100.;
   }
@@ -416,13 +415,13 @@ func covMat1layer(nbWfs, l,cnh_hl, hl, l0h_hl,loworder=,singleWFS=,deriv=)
     if(singleWFS){m = singleWFS;}
     else{m=p;}
     
-    dipl = compute_dipl(data.wfs(m).sX, data.tel.diam, hl, data.wfs(m).x/206265., data.wfs(m).y/206265., data.wfs(m).lgsH,data.learn.xshift(m),data.learn.yshift(m),obs=data.tel.obs);
+    dipl = compute_dipl(data.wfs(m).sX, data.tel.diam, hl, data.wfs(m).x/206265., data.wfs(m).y/206265., data.wfs(m).lgsH,xshift(m),yshift(m),obs=data.tel.obs);
     
     for(q=p; q<=nbWfs; q++) {       // boucle 2 sur les asos
       if(singleWFS){n = singleWFS;}
       else{n=q;}
       
-      djql = compute_dipl(data.wfs(n).sX, data.tel.diam, hl, data.wfs(n).x/206265., data.wfs(n).y/206265., data.wfs(n).lgsH,data.learn.xshift(n),data.learn.yshift(n),obs=data.tel.obs);
+      djql = compute_dipl(data.wfs(n).sX, data.tel.diam, hl, data.wfs(n).x/206265., data.wfs(n).y/206265., data.wfs(n).lgsH,xshift(n),yshift(n),obs=data.tel.obs);
 
 
       if(data.wfs(m).type!=0 && data.wfs(n).type!=0 ) {   // if both WFS are valid ones
@@ -444,7 +443,7 @@ func covMat1layer(nbWfs, l,cnh_hl, hl, l0h_hl,loworder=,singleWFS=,deriv=)
   return Cmod_hl;
 }
 
-func covMatAllLayers(nbWfs, cnh, alt, l0h, filtreTilt,loworder=,singleWFS=,deriv=,verb=)
+func covMatAllLayers(nbWfs, cnh, alt, l0h,xshift,yshift, filtreTilt,loworder=,singleWFS=,deriv=,verb=)
 /* DOCUMENT calcMatCov_explicit(nbWfs, L0, r0, alti, xaso, yaso, XPup, YPup, diamPup, thetaML)
    
    <nbWfs>      : scalar, number of wfss
@@ -471,7 +470,7 @@ func covMatAllLayers(nbWfs, cnh, alt, l0h, filtreTilt,loworder=,singleWFS=,deriv
       if(verb){
         write,format="\rGenerating the %d th layer...",l;
       }
-      Cmod += covMat1layer(nbWfs, l,cnh(l) , alt(l), l0h(l),loworder=loworder,singleWFS=singleWFS,deriv=deriv);
+      Cmod += covMat1layer(nbWfs, l,cnh(l) , alt(l), l0h(l),xshift,yshift,loworder=loworder,singleWFS=singleWFS,deriv=deriv);
     }
   }
 
@@ -499,7 +498,7 @@ func covMatModel(data, fitEstim,&grad,deriv=,loworder=,singleWFS=,verb=)
   // get all the variables that were encapsulated inside fitEstim
   unpackcoeffs, fitEstim, cnh, alt, l0h, tracking, xshift, yshift;
   
-  Cfit = covMatAllLayers(data.nwfs, cnh, alt,l0h,filtreTilt,loworder=loworder,singleWFS=singleWFS);
+  Cfit = covMatAllLayers(data.nwfs, cnh, alt,l0h,xshift,yshift,filtreTilt,loworder=loworder,singleWFS=singleWFS);
 
    // ................... Tracking perturbation ........................
   if(!data.learn.ttr){

@@ -301,9 +301,9 @@ func learn(Cdd,fitMethod,pinit,pind,Cnn,verb=,deriv=)
       //getting uncertainties
       du = (*res.stdev)(indexFit);
       nl = data.learn.nl;
-      data.uncertainties.l0h = du(1:nl);
-      data.uncertainties.altitude = du(nl+1:2*nl);
-      data.uncertainties.cnh = du(2*nl+1:3*nl);
+      data.uncertainties.l0h(1:nl) = du(1:nl);
+      data.uncertainties.altitude(1:nl) = du(nl+1:2*nl);
+      data.uncertainties.cnh(1:nl) = du(2*nl+1:3*nl);
     }
     cnh2Struct, ptrcn2h;
     
