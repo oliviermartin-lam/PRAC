@@ -113,8 +113,6 @@ func define_wfs(pathdata,verb=)
       data.wfs(i).keeponlytiltMatrix = &filt_TTvec(data.wfs(i).nssp);
     }
   }
-
-  
 }
 
 func define_dm(pathdata,verb=)
@@ -144,11 +142,6 @@ func define_dm(pathdata,verb=)
   // couplage defini pour l'actu voisin, avec x et y exprimes en "rayon pupille"
   couplage = 0.2;
   data.dm.x0 = sqrt(-2/log(couplage)) / nssp;
-  
-  if(verb){
-    //write,format="Nber of actuators through diam : %d\n",data.dm.ndiam;
-    //write,format="Total number of actuators      : %d\n",data.dm.nactu;
-  }
   
 }
 
@@ -267,12 +260,6 @@ func define_fourier(void,verb= )
   data.fourier.champ_Dphi = data.fourier.npix * data.fourier.ud;
   data.fourier.dactupix = km;
 
-  if(verb){
-    //write,format="Number of samples in dactu : %d\n", km;
-    //write,format="ud                         : %f\n", data.fourier.ud;
-    //write,format="champ_Dphi                 : %f\n", data.fourier.champ_Dphi;
-  }
-
   // size of the pixel of Wiener image (meters^-1)
   data.fourier.uk = 1./data.fourier.champ_Dphi; 
   data.fourier.uz = data.fourier.uk * data.camir.lambda_ir *206264.8062471;
@@ -292,20 +279,16 @@ func define_turbu(pathdata,verb=)
   data.turbu.r0vis = p(1);
   data.turbu.L0 = p(2);
   data.turbu.v = p(3);
-  data.turbu.dir = p(4);
   data.turbu.r0ir = data.turbu.r0vis * (data.camir.lambda_ir/data.lambda_vis)^1.2;
   //Concatenating uncertainties on global parameters into data.uncertainties struct
   data.uncertainties.r0  = dp(1);
   data.uncertainties.L0  = dp(2);
   data.uncertainties.v   = dp(3);
-  data.uncertainties.dir = dp(4);
 
   if(verb){
     write,format="r0(%g nm)     = %.3g cm +/- %.2g\n",data.lambda_vis*1e9,data.turbu.r0vis*100., 100*dp(1);
     write,format="L0             = %.3g m +/- %.2g\n",data.turbu.L0,dp(2);
     write,format="Windspeed      = %.3g m/s +/- %.2g\n",data.turbu.v,dp(3);
-    write,format="Wind direction = %.3g deg +/- %.2g\n",data.turbu.dir,dp(4);
-    write,format="Old Windspeed  = %.3g m/s +/- %.2g\n",p(5),dp(5);
   }
   
   //loading of the on-sky retrieved profiles from post-processing
@@ -337,53 +320,26 @@ func define_turbu(pathdata,verb=)
     if(!direxist(goodDir)) system,"mkdir " + goodDir;
     writefits, goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(NL_DEF)+".fits",ptr_prof;
   }
-  
+
   //cnh profile
   data.learn.cnh               = abs(*ptr_prof(1));
-  data.learn.altitude          = *ptr_prof(2);
-  data.learn.l0h               = abs(*ptr_prof(3));
-  data.learn.tracking          = *ptr_prof(4);
-  data.learn.vh                = abs(*ptr_prof(5));
-  data.learn.dirh             = *ptr_prof(6);
   data.uncertainties.cnh       = abs(*ptr_prof(7));
+  data.learn.altitude          = *ptr_prof(2);
   data.uncertainties.altitude  = abs(*ptr_prof(8));
+  data.learn.l0h               = abs(*ptr_prof(3));
   data.uncertainties.l0h       = abs(*ptr_prof(9));
+  data.learn.tracking          = *ptr_prof(4);
   data.uncertainties.tracking  = abs(*ptr_prof(10));
+
+  getWindspeedProfile,dvh,ddirh,verb=verb;
+  ptr_prof(5)  = &data.learn.vh;
+  ptr_prof(11) = &data.uncertainties.vh;
+  
+  data.learn.vh                = abs(*ptr_prof(5));
   data.uncertainties.vh        = abs(*ptr_prof(11));
-  data.uncertainties.dirh      = abs(*ptr_prof(12));
+
 
   w = where(data.learn.l0h >=100.);
-  //if(is_array(w)) data.learn.l0h(w) = 100.;
-    
-  /*if(data.rtc.obsmode == "SCAO"){
-    data.learn.nl          = 1;
-    data.learn.cnh(1)      = data.turbu.r0vis^(-5/3.);
-    data.learn.altitude(1) = 0;
-    data.learn.l0h(1)      = data.turbu.L0;
-    data.learn.vh(1)       = data.turbu.v;
-    }*/
-
-  
-  
  
 }
   
-
-
-
-
-/*
-  //Manages the profile to merge the closer layers than the tomographic resolution
-  if(is_array(*data.rtc.ptrlistLgs)){
-  lgsH = (data.wfs(*data.rtc.ptrlistLgs).lgsH)(1);
-  }
-
-  dh = findAltitudeMax(data.wfs.x,data.wfs.y,Bmax,useTS=1,altituderes=1,altLGS=lgsH);
-  hmax = int(findAltitudeMax(data.wfs.x,data.wfs.y,Bmax,useTS=1,altituderes=0,altLGS=lgsH));
-  prof = mergesLayers(data.turbu.cnh,data.turbu.altitude,data.turbu.l0h,indgen(0:hmax:int(2*dh)));
-   
-  nl = data.learn.nl = data.turbu.nl = numberof(prof(,1));
-  data.turbu.cnh(1:nl) =  data.learn.cnh(1:nl) = prof(,1);
-  data.turbu.altitude(1:nl) =  data.learn.altitude(1:nl) =  prof(,2);
-  data.turbu.l0h(1:nl) =  data.learn.l0h(1:nl) = prof(,3);
-  */

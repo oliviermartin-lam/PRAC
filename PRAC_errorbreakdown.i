@@ -20,7 +20,7 @@ func PRAC_errorbreakdown(void,verb=)
   //................. VED .....................//
 if(data.rtc.obsmode == "MOAO"){
   for(l=1;l<=data.learn.nl;l++){
-    covLearn_hl = covMat1layer(data.nwfs,l,data.learn.cnh(l),data.learn.altitude(l),data.learn.l0h(l),loworder=1);
+    covLearn_hl = covMat1layer(data.nwfs,l,data.learn.cnh(l),data.learn.altitude(l),data.learn.l0h(l),data.learn.xshift,data.learn.yshift,loworder=1);
     covLearn_hl = handle_tilt_from_wfstype(covLearn_hl);
     data.budget.ved(l) = computesTomoError(covLearn_hl, *data.rtc.R, data.its);
   }
