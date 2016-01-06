@@ -205,11 +205,11 @@ func invert_eigen( L, nfilt )
 | |___|  _ <|  _ <| |_| |  _ < 
 |_____|_| \_\_| \_\\___/|_| \_\
 */
-func propagateError2Dm(eps, mca, lib=,verb= )
+func propagateError2Dm(eps, mca)
 /* DOCUMENT cvv = propagateError2Dm(eps, mca, lib= )
    
      Computes the cov matrix of the residual error.
-     Returns volts^2 when mca=mca is properly defined.
+     Returns volts^2 when mca is properly defined.
      
      The input covariance matrix <eps> is in arcsec^2.
      The output covariance matrix <Cvv> is in volts^2, to be used
@@ -218,8 +218,6 @@ func propagateError2Dm(eps, mca, lib=,verb= )
      SEE ALSO:
  */
 {
-  if(verb)
-    write,format="Computing cov matrix on voltages (%s)\n",lib;
  
   Cvv = mca(,+) * (eps(,+)*mca(,+))(+,);
   

@@ -75,12 +75,30 @@ func plotProfiles(void)
   write,format="%d processed files\n",numberof(cnh)/5;
   alt    /= 1000;
   //computing integrated value
-  cnh0 = l0eff = v0 = [];
+  cnh0 = l0eff = v0 = cnhalt = l0alt = v0alt = cnhg = l0g = v0g = [];
   for(i=1;i<=numberof(cnh)/5;i++){
     cnhi   = cnh(1+(i-1)*5:5*i);
+    cnha   = cnhi(2:);
+    l0hi   = l0h(1+(i-1)*5:5*i);
+    wi     = where(l0hi<=100.)
+    vhi    = vh(1+(i-1)*5:5*i);
+    //global values
     cnh0   = grow(cnh0,0.103/sum(cnhi)^(-3/5.));
-    l0eff  = ((l0h(1+(i-1)*5:5*i)^(5/3.)*cnhi)/sum(cnhi))^(3/5.);
-    v0     = ((vh(1+(i-1)*5:5*i)^(5/3.)*cnhi)/sum(cnhi))^(3/5.);
+    if(is_array(wi))
+      l0eff  = grow(l0eff,(sum(l0hi(wi)^(5/3.)*cnhi(wi))/sum(cnhi(wi)))^(3/5.));
+    v0     = grow(v0,(sum(cnhi*vhi^(5/3.))/sum(cnhi))^(3/5.));
+    //ground values
+    cnhalt = grow(cnhalt,0.103/sum(cnha)^(-3/5.));
+    if(numberof(wi) == 1 && wi(1) != 1){
+      l0alt  = grow(l0alt,(sum(cnhi(wi)*l0hi(wi)^(5/3.))/sum(cnhi(wi)))^(3/5.));
+    }else if(is_array(wi) && numberof(wi)!=1){
+      l0alt  = grow(l0alt,(sum(cnhi(wi(2:))*l0hi(wi(2:))^(5/3.))/sum(cnhi(wi(2:))))^(3/5.));
+    }
+    v0alt  = grow(v0alt,(sum(cnha*vhi(2:)^(5/3.))/sum(cnha))^(3/5.));
+    //values integrated onto altitude
+    cnhg   = grow(cnhg,0.103/cnhi(1)^(-3/5.));
+    l0g    = grow(l0g,l0hi(1));
+    v0g    = grow(v0g,vhi(1));
   }
 
   cnh     = 0.103/cnh^(-3/5.);
@@ -89,6 +107,10 @@ func plotProfiles(void)
   alt(wa) = 20.;
   w0 = where(l0h<=40);
   write,format="%.3g%s of jerk outer scale\n",100.*(1.- double(numberof(w0))/numberof(l0h)),"%s";
+
+
+  //..... DISPLAY .....//
+  
   //Plotting altitude versus cnh
   winkill,0;window,0,dpi=90,style="aanda.gs";
   plmk,alt,cnh,marker=4,msize=0.1;
@@ -99,18 +121,20 @@ func plotProfiles(void)
 
   //Plotting seeing histograms
   winkill,4;window,4,dpi=90,style="aanda.gs";
-  res = .05;
-  w1 = where(cnh0 <=2.);
-  ns = int(minmax(cnh0(w1))(dif)(1)/res-1.);
-  histo,cnh0(w1),ns;
-  histo,cnh(where(alt == 0 & cnh<=2.)),ns;
-  histo,cnh(where(alt >0 & cnh<=2.)),ns;
+  res = .04;
+  ns = int(minmax(cnh0(where(cnh0<2.)))(dif)(1)/res-1.);
+  histo,cnh0(where(cnh0<2.)),ns;
+  histo,cnhg(where(cnhg<2.)),ns;
+  histo,cnhalt(where(cnhalt<2.)),ns;
   xytitles,"Seeing at 500 nm (arcsec)","Counts";
   lim = limits();
   plt,"A: Global seeing",lim(2)/2,lim(4)/2,tosys=1;
   plt,"B: Ground value ",lim(2)/2,lim(4)/2-lim(4)/8,tosys=1;
   plt,"C: Altitude value",lim(2)/2,lim(4)/2-lim(4)/4,tosys=1;
   pdf, "cnh_histo.pdf";
+  write,format="Average global seeing         = %.3g''\n",avg(cnh0(where(cnh0<2.)));
+  write,format="Average ground seeing         = %.3g''\n",avg(cnhg(where(cnhg<2.)));
+  write,format="Average altitude seeing       = %.3g''\n",avg(cnhalt(where(cnhalt<2.)));
   
   //Plotting altitude versus l0h
   winkill,1;window,1,dpi=90,style="aanda.gs";
@@ -122,20 +146,22 @@ func plotProfiles(void)
 
   //Plotting outer scale histograms
   winkill,5;window,5,dpi=90,style="aanda.gs";
-  res = .1;
-  w0 = where(l0eff<=40);
-  ns = int(minmax(l0eff(w0))(dif)/res-1.);
-  histo,l0eff(w0),ns;
-  histo,l0h(where(alt == 0 & l0h<=40)),ns;
-  histo,l0h(where(alt > 0 & l0h<=40)),ns;
+  res = 1.;
+  ns = int(minmax(l0eff(where(l0eff<=100)))(dif)/res-1.);
+  histo,l0eff(where(l0eff<=100)),ns;
+  histo,l0g(where(l0g<=100)),ns;
+  histo,l0alt(where(l0alt<=100)),ns;
   xytitles,"Outer scale (m)","Counts";
   lim = limits();
   plt,"A: Effective outer scale",lim(2)/2,lim(4)/2,tosys=1;
   plt,"B: Ground value ",lim(2)/2,lim(4)/2-lim(4)/8,tosys=1;
   plt,"C: Altitude value",lim(2)/2,lim(4)/2-lim(4)/4,tosys=1;
   pdf, "l0h_histo.pdf";
-  
-  //Plotting altitude versus l0h
+  write,format="Average effective outer scale = %.3gm\n",avg(l0eff(where(l0eff<=100)));
+  write,format="Average ground outer scale    = %.3gm\n",avg(l0g(where(l0g<=100)));
+  write,format="Average altitude outer scale  = %.3gm\n",avg(l0alt(where(l0alt<=100)));
+
+  //Plotting altitude versus vh
   winkill,2;window,2,dpi=90,style="aanda.gs";
   plmk,alt,vh,marker=4,msize=0.1;
   range,-1,25;
@@ -143,26 +169,22 @@ func plotProfiles(void)
   xytitles,"v(h) (m/s)","Altitude (km)";
   pdf, "vh_profile.pdf";
 
-  //Plotting seeing histograms
-  w2 = where(vh<=20);
+  //Plotting wind speed histograms
   winkill,6;window,6,dpi=90,style="aanda.gs";
-  res = .5;
-  ns = int(minmax(vh(w2))(dif)/res-1.);
-  histo,vh(w2),ns;
-  histo,vh(where(alt == 0 & vh<=30)),ns;
-  histo,vh(where(alt > 0 & vh<=30)),ns;
+  res = .4;
+  ns = int(minmax(v0(where(v0<30.)))(dif)/res-1.);
+  histo,v0(where(v0<30.)),ns;
+  histo,v0g(where(v0g<30.)),ns;
+  histo,v0alt(where(v0alt<30.)),ns;
   xytitles,"Wind speed (m/s)","Counts";
   lim = limits();
   plt,"A: Temporal coherence wind velocity",lim(2)/2,lim(4)/2,tosys=1;
   plt,"B: Ground value ",lim(2)/2,lim(4)/2-lim(4)/8,tosys=1;
   plt,"C: Altitude value",lim(2)/2,lim(4)/2-lim(4)/4,tosys=1;
   pdf, "vh_histo.pdf";
-  
-  //Plotting altitude versus dirh
-  winkill,3;window,3,dpi=90,style="aanda.gs";
-  plmk,alt,dirh,marker=4,msize=0.1;
-  range,-1,25;
-  xytitles,"!a(h) (degree)","Altitude (km)";
+  write,format="Average global wind speed     = %.3gm/s\n",avg(v0(where(v0<30.)));
+  write,format="Average ground wind speed     = %.3gm/s\n",avg(v0g(where(v0g<30.)));
+  write,format="Average altitude wind speed   = %.3gm/s\n",avg(v0alt(where(v0alt<30.)));
 }
 
 /*
@@ -463,7 +485,7 @@ func PRAC_all(void)
 {
   
 
-  Dir = ["2013_09_15","2013_09_13"];
+  Dir = ["2013_09_15"];
 
   ndir = numberof(Dir);
   tmpDir          = "/home/omartin/CANARY/Data/PHASE_B/tmp/stycomartin/";

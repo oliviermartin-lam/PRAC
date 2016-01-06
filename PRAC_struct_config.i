@@ -179,8 +179,14 @@ func define_rtc(pathdata,verb=)
       write,format="Calibration time of the reconstructor : %s\n",strpart(suffmt,12:);
     }
   }
-  
-  
+
+  //grabbing interaction and calibration matrix
+  suffmi      = readFitsKey(pathdata,"MI");//in pixel/ADU
+  mi = (3276.8*data.wfs(data.its).pixarc*restorefits("mi",suffmi))(,1:data.dm.nactu)
+  data.rtc.MI = &mi; 
+  suffmc      = readFitsKey(pathdata,"MC");//in ADU/pixel
+  mc = (restorefits("mc",suffmc)/(3276.8*data.wfs(data.its).pixarc))(1:data.dm.nactu,);
+  data.rtc.MC = &mc; 
 }
 
 func define_ir(pathdata,verb=)
@@ -334,6 +340,7 @@ func define_turbu(pathdata,verb=)
   getWindspeedProfile,dvh,ddirh,verb=verb;
   ptr_prof(5)  = &data.learn.vh;
   ptr_prof(11) = &data.uncertainties.vh;
+  writefits, goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(NL_DEF)+".fits",ptr_prof;
   
   data.learn.vh                = abs(*ptr_prof(5));
   data.uncertainties.vh        = abs(*ptr_prof(11));

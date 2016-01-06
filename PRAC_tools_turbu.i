@@ -35,9 +35,15 @@ func determineGlobalParameters(dataset,&p,&dp,arc=,verb=)
   L0 = median(tmpR0L0(,2));
   wspeed = avg(v);
   //derivating uncertainties
-  dr = sqrt(tmpR0L0(rms,1)^2/(nngs-1.) + du(avg,1));
-  dl = sqrt(tmpR0L0(rms,2)^2/(nngs-1.) + du(avg,2));
-  dv = v(rms)/sqrt(nngs-1.);
+  if(nngs !=1){
+    dr = sqrt(tmpR0L0(rms,1)^2/(nngs-1.) + du(avg,1));
+    dl = sqrt(tmpR0L0(rms,2)^2/(nngs-1.) + du(avg,2));
+    dv = v(rms)/sqrt(nngs-1.);
+  }else{
+    dr = sqrt(tmpR0L0(rms,1)^2 + du(avg,1));
+    dl = sqrt(tmpR0L0(rms,2)^2 + du(avg,2));
+    dv = v(rms);
+  }
   //merging results
   p = [r0,L0,wspeed];
   dp = [dr,dl,dv]
@@ -459,7 +465,10 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
       v(p)   = getWindSpeed(slopes_hl(slrange(icam),),icam);
     }
     v_h(l)  = avg(v);
-    dv_h(l) = v(rms)/sqrt(nngs-1.); 
+    if(nngs!=1)
+      dv_h(l) = v(rms)/sqrt(nngs-1.);
+    else
+      dv_h(l) = v(rms)
   }
   
   //Getting back to the intial data struct
@@ -506,7 +515,7 @@ func getWindSpeed(s, icam )
   // windspeed
   size_ssp = data.tel.diam/data.wfs(icam).sX;
   if( tau0>0 )
-    windspeed = 0.754*size_ssp/tau0;// factor 0.754 has been calibrated by yao simulation
+    windspeed = 0.791*size_ssp/tau0;// factor 0.791 has been calibrated by yao simulation
   else
     windspeed=0.0;
   return windspeed;

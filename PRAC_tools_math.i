@@ -217,6 +217,19 @@ func minmax(arg)
 {
   return [min(arg),max(arg)];
 }
+func proportionalRegress(y,x)
+/*DOCUMENT alpha = proportionalRegress(y,x)
+  
+  Returns the proportionnal regression coefficient alpha which
+  minimizes sum((y - a*x)^2 ).
+  
+*/
+
+{
+  x = double(x);
+  y = double(y);
+  return sum(y*x)/sum(x^2);
+}
 func regress(y,x,pen=,ab=)
 /* DOCUMENT regress(y,x)
             regress,y,x,pen=1

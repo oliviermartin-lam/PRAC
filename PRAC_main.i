@@ -17,39 +17,6 @@ include, "PRAC_tools_display.i";
 pldefault,font="times";
 pltitle_font = "times";
 
-/*
-slopestl_2013-09-18_02h30m25s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h30m48s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h31m11s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h31m34s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h31m57s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h32m24s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h32m47s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h33m10s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h33m36s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h34m00s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h34m23s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h34m45s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h35m09s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h35m32s_script292_scao_glao4L3N_moao4l3n.fits
-slopestl_2013-09-18_02h35m59s_script292_scao_glao4L3N_moao4l3n.fits
-
-slopestl_2013-09-18_02h39m09s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h39m32s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h39m55s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h40m18s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h40m42s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h41m09s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h41m32s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h41m55s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h42m18s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h42m41s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h43m05s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h43m28s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h43m50s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h44m14s_script293_scao_moao0L3N_moao4l3n.fits
-slopestl_2013-09-18_02h44m37s_script293_scao_moao0L3N_moao4l3n.fits
-*/
 
 func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
 /*DOCUMENT p = PRAC_main("02h31m34s",verb=1,disp=0); p = PRAC_main("02h30m48s",verb=1,disp=1);
@@ -73,26 +40,27 @@ func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
   include, "PRAC_struct_init.i",1;
   include, "PRAC_struct_config.i",1;
   define_structs, timedata,verb=verb;
-  if(data.wfs(data.its).type == 0){
+  //if(data.wfs(data.its).type == 0){
     return 0;
-  }
+    //}
 
   if(!budgetonly){
     //..... Derivation of the perfect telescope OTF .....//
     OTF_tel_tmp = OTF_telescope();
 
     //...... Derivation of the phase structure functions DPHI_bwfit from mixed bandwidth and fitting error .....//
-    //Computes an interaction matrix
-    mia = intermat(data.dm);
-
-    // Inversion of the interaction matrix -> command matrix
-    mca = computeCommandMat(mia, nmf=-1, condi=30., disp=0);
+    
+    //mca = *data.rtc.MC;
+    if(is_void(mca)){
+      mia = intermat(data.dm);
+      mca = computeCommandMat(mia, nmf=-1, condi=30., disp=0);
+    }
 
     // Derivation of the phase structure function from the bw + fit errors in radians^2
     if(is_void(geo)) geo = "square";
   
     DPHI_bwfit = compute_DphiBwFitting(data.turbu.r0ir, data.turbu.L0, data.turbu.v,data.turbu.dir,data.rtc.Fe,data.rtc.delay,data.rtc.gain,data.rtc.BP,geo,mode=data.rtc.obsmode,verb=verb);
-    
+
     //...... Derivation of the OTF from static aberration except NCPA .....//
     OTF_stats_tmp = PRAC_OTF_stats(mca,PSF_stats);
   }
@@ -102,9 +70,8 @@ func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
     //..... Derivation of the phase struture function of the tomography only in volts^2 .....//
 
     //computes the covariance matrix of voltages
-    Cvv = propagateError2Dm(Cee, mca,verb=verb );
+    Cvv = propagateError2Dm(Cee, mca );
 
-  
     //computing the phase structure function from the tomo error in rd^2
     DPHI_tomo = dphiFromUij(Cvv,mode,verb=verb);
 

@@ -49,6 +49,7 @@ struct rtc_struct{
   pointer  ptrlistOffAxisNgs;     
   pointer  ptrlistLgs;
   pointer  MI;
+  pointer  MC;
   pointer  volts;
 };
 

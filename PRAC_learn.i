@@ -399,7 +399,8 @@ func Learn_2steps(data, &fitEstim, Cdd, indexFit,tol=,verb=,deriv=)
   
   fitEstim = packcoeffs( data, indexFit );
   //4. Fit without ground layer
-  write, "\rFirst step: fit of the altitude layers";
+  if(verb)
+  write, " \rFirst step: fit of the altitude layers";
   takesDiag(Cdd_alt) = 0.;
 
   res = lmfit_Learn(covMatModel, data, fitEstim, Cdd_alt, fit=indexFit, tol=tol,stdev=1,verb=verb,deriv=deriv );
@@ -426,7 +427,8 @@ func Learn_2steps(data, &fitEstim, Cdd, indexFit,tol=,verb=,deriv=)
   data.learn.runLearnTwoSteps = 0;
   takesDiag(Cdd) = 0.;
   //7. Fit with GL
-  write, "\rSecond step: fit of the ground layers' strength\r";
+  if(verb)
+    write, "\rSecond step: fit of the ground layers' strength\r";
   res = lmfit_Learn(covMatModel, data, fitEstim, Cdd, fit=indexFit, tol=tol,stdev=1,verb=verb,deriv=deriv );
   
   return res;
