@@ -121,20 +121,24 @@ func plotProfiles(void)
 
   //Plotting seeing histograms
   winkill,4;window,4,dpi=90,style="aanda.gs";
-  res = .04;
+  res = .04;cnhlim = 2.;
   ns = int(minmax(cnh0(where(cnh0<2.)))(dif)(1)/res-1.);
   histo,cnh0(where(cnh0<2.)),ns;
   histo,cnhg(where(cnhg<2.)),ns;
-  histo,cnhalt(where(cnhalt<2.)),ns;
+  histo,cnhalt(where(cnhalt<2.)),int(ns/1.5);
   xytitles,"Seeing at 500 nm (arcsec)","Counts";
   lim = limits();
-  plt,"A: Global seeing",lim(2)/2,lim(4)/2,tosys=1;
-  plt,"B: Ground value ",lim(2)/2,lim(4)/2-lim(4)/8,tosys=1;
-  plt,"C: Altitude value",lim(2)/2,lim(4)/2-lim(4)/4,tosys=1;
+  plt,"A: Global seeing",lim(2)/2,lim(4)/1.5,tosys=1;
+  plt,"B: Ground value ",lim(2)/2,lim(4)/1.5-lim(4)/8,tosys=1;
+  plt,"C: Altitude value",lim(2)/2,lim(4)/1.5-lim(4)/4,tosys=1;
+  limits,-.1,2.2;
   pdf, "cnh_histo.pdf";
-  write,format="Average global seeing         = %.3g''\n",avg(cnh0(where(cnh0<2.)));
-  write,format="Average ground seeing         = %.3g''\n",avg(cnhg(where(cnhg<2.)));
-  write,format="Average altitude seeing       = %.3g''\n",avg(cnhalt(where(cnhalt<2.)));
+  w0 = where(cnh0<=cnhlim);
+  write,format="Average global seeing         = %.3g''  +/- %.3g\n",avg(cnh0(w0)),(cnh0(w0))(rms)/sqrt(numberof(cnh0(w0)) -1.);
+  w0 = where(cnhg<=cnhlim);
+  write,format="Average ground seeing         = %.3g''   +/- %.3g\n",avg(cnhg(w0)),(cnhg(w0))(rms)/sqrt(numberof(cnhg(w0)) -1.);
+  w0 = where(cnhalt<=cnhlim);
+  write,format="Average altitude seeing       = %.3g''   +/- %.3g\n",avg(cnhalt(w0)),(cnhalt(w0))(rms)/sqrt(numberof(cnhalt(w0)) -1.);
   
   //Plotting altitude versus l0h
   winkill,1;window,1,dpi=90,style="aanda.gs";
@@ -146,45 +150,53 @@ func plotProfiles(void)
 
   //Plotting outer scale histograms
   winkill,5;window,5,dpi=90,style="aanda.gs";
-  res = 1.;
-  ns = int(minmax(l0eff(where(l0eff<=100)))(dif)/res-1.);
-  histo,l0eff(where(l0eff<=100)),ns;
-  histo,l0g(where(l0g<=100)),ns;
-  histo,l0alt(where(l0alt<=100)),ns;
+  res = 1.;l0lim=40.;
+  ns = int(minmax(l0eff(where(l0eff<=l0lim)))(dif)/res-1.);
+  histo,l0eff(where(l0eff<=l0lim)),ns;
+  histo,l0g(where(l0g<=l0lim)),ns;
+  histo,l0alt(where(l0alt<=l0lim)),ns;
   xytitles,"Outer scale (m)","Counts";
   lim = limits();
   plt,"A: Effective outer scale",lim(2)/2,lim(4)/2,tosys=1;
   plt,"B: Ground value ",lim(2)/2,lim(4)/2-lim(4)/8,tosys=1;
   plt,"C: Altitude value",lim(2)/2,lim(4)/2-lim(4)/4,tosys=1;
   pdf, "l0h_histo.pdf";
-  write,format="Average effective outer scale = %.3gm\n",avg(l0eff(where(l0eff<=100)));
-  write,format="Average ground outer scale    = %.3gm\n",avg(l0g(where(l0g<=100)));
-  write,format="Average altitude outer scale  = %.3gm\n",avg(l0alt(where(l0alt<=100)));
+  w0 = where(l0eff<=l0lim);
+  write,format="Average effective outer scale = %.3g m   +/- %.3g\n",avg(l0eff(w0)),(l0eff(w0))(rms)/sqrt(numberof(l0eff(w0)) -1.);
+  w0 = where(l0g<=l0lim);
+  write,format="Average ground outer scale    = %.3g m   +/- %.3g\n",avg(l0g(w0)),(l0g(w0))(rms)/sqrt(numberof(l0g(w0)) -1.);
+  w0 = where(l0alt<=l0lim);
+  write,format="Average altitude outer scale  = %.3g m   +/- %.3g\n",avg(l0alt(w0)),(l0alt(w0))(rms)/sqrt(numberof(l0alt(w0)) -1.);
 
   //Plotting altitude versus vh
   winkill,2;window,2,dpi=90,style="aanda.gs";
   plmk,alt,vh,marker=4,msize=0.1;
   range,-1,25;
-  limits,-1,10;
+  vlim=14;
+  limits,-1,vlim;
   xytitles,"v(h) (m/s)","Altitude (km)";
   pdf, "vh_profile.pdf";
 
   //Plotting wind speed histograms
   winkill,6;window,6,dpi=90,style="aanda.gs";
   res = .4;
-  ns = int(minmax(v0(where(v0<30.)))(dif)/res-1.);
-  histo,v0(where(v0<30.)),ns;
-  histo,v0g(where(v0g<30.)),ns;
-  histo,v0alt(where(v0alt<30.)),ns;
+  ns = int(minmax(v0(where(v0<vlim)))(dif)/res-1.);
+  histo,v0(where(v0<vlim)),ns;
+  histo,v0g(where(v0g<vlim)),ns;
+  histo,v0alt(where(v0alt<vlim)),ns;
   xytitles,"Wind speed (m/s)","Counts";
   lim = limits();
   plt,"A: Temporal coherence wind velocity",lim(2)/2,lim(4)/2,tosys=1;
   plt,"B: Ground value ",lim(2)/2,lim(4)/2-lim(4)/8,tosys=1;
   plt,"C: Altitude value",lim(2)/2,lim(4)/2-lim(4)/4,tosys=1;
   pdf, "vh_histo.pdf";
-  write,format="Average global wind speed     = %.3gm/s\n",avg(v0(where(v0<30.)));
-  write,format="Average ground wind speed     = %.3gm/s\n",avg(v0g(where(v0g<30.)));
-  write,format="Average altitude wind speed   = %.3gm/s\n",avg(v0alt(where(v0alt<30.)));
+  
+  w0 = where(v0g<vlim);
+  write,format="Average global wind speed     = %.3g m/s +/- %.3g\n",avg(v0(w0)),(v0(w0))(rms)/sqrt(numberof(v0(w0)) -1.);
+  w0 = where(v0g<vlim);
+  write,format="Average ground wind speed     = %.3g m/s +/- %.3g\n",avg(v0g(w0)),(v0g(w0))(rms)/sqrt(numberof(v0g(w0)) -1.);
+  w0 = where(v0alt<vlim);
+  write,format="Average altitude wind speed   = %.3g m/s +/- %.3g\n",avg(v0alt(w0)),(v0alt(w0))(rms)/sqrt(numberof(v0alt(w0)) -1.);
 }
 
 /*

@@ -337,10 +337,12 @@ func define_turbu(pathdata,verb=)
   data.learn.tracking          = *ptr_prof(4);
   data.uncertainties.tracking  = abs(*ptr_prof(10));
 
+  /*
   getWindspeedProfile,dvh,ddirh,verb=verb;
   ptr_prof(5)  = &data.learn.vh;
   ptr_prof(11) = &data.uncertainties.vh;
   writefits, goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(NL_DEF)+".fits",ptr_prof;
+  */
   
   data.learn.vh                = abs(*ptr_prof(5));
   data.uncertainties.vh        = abs(*ptr_prof(11));

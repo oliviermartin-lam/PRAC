@@ -342,7 +342,13 @@ func intersample( Cvvmap, N, ud, D, dactupix, couplingfact)
 }
 
 
-func dphiFromUij(Cvv,mode,verb=)
+func dphiFromUij(Cvv,mode,&dphi,verb=)
+/*DOCUMENT dphiFromUij(Cvv,"Vii")
+
+  Returns the phase structure function (SF) average on the pupil from the tomographic error in rd^2. You have to specified the inputs mode as either "Uij" to average the  SF using Veran's method (1997), or "Vii" for using Gendron's method (2006) or "intersample" to use simplified Gendron's approach (2014 Kaust).
+  The covariance matrix of voltages Cvv must be given in volts^2.
+
+ */
 {
   tic,3;
   if(verb)
@@ -351,12 +357,12 @@ func dphiFromUij(Cvv,mode,verb=)
   
   // computation of influence function and defining the pupil
   N = data.fourier.npix;
-  x = (indgen(N)-(N/2+1)) * data.fourier.ud / (data.tel.diam/2.);   // x exprime en rayon pupille
+  x = (indgen(N)-(N/2+1)) * data.fourier.ud / (data.tel.diam/2.);   // x is expressed in pupil radius
   x = x(,-:1:N);
   y = transpose(x);
-  P = circularPupFunction(x,y,data.tel.obs);
+  P = circularPupFunction(x,y,data.tel.obs); //pupil function expressed in pupil radius
 
-  //autocorrelation of the pupil
+  //autocorrelation of the pupil expressed in pupil radius^-1
   fftpup = fft(P);
   conjpupfft = conjugate(fftpup);
   G = fft(fftpup*conjpupfft,-1).re +1e-15;
@@ -364,7 +370,7 @@ func dphiFromUij(Cvv,mode,verb=)
   
   //defining the modes
   if(mode != "intersample"){
-    fi = readfits("dm_modes.fits",err=1);
+    fi = readfits("dm_modes.fits",err=1); // influence functions in meters
     if(is_void(fi)){
       fi = array(0.,N,N,data.dm.nactu);
       xi = (*data.dm.csX);
@@ -397,26 +403,31 @@ func dphiFromUij(Cvv,mode,verb=)
       dphi = dphi.re/G;
       G /= max(G);
       msk = G > 1e-5;
-      dphi *= msk/2.;
+      dphi *= msk;
+      //to get the SF in rd^2
+      dphi *= (2*pi/data.camir.lambda_ir)^2.;
+      
   }else if(mode == "Vii"){
     //Diagonalizing the Cvv matrix
-    l = SVdec(Cvv,Bt,B);
-    M = fi(,,+)*B(,+);
+    l = SVdec(Cvv,Bt,B); // in volts^2
+    M = fi(,,+)*B(,+); 
   
     //loop on actuators
     tmp = Mi = 0.*P;
     for(i=1;i<=data.dm.nactu;i++){
-      Mi =  M(,,i);
+      Mi =  M(,,i); //must be in volt^2 * meter^2
       //Vii computation
-      Vii = (fft(Mi*Mi)*conjpupfft).re - abs(fft(Mi))^2;
+      Vii = (fft(Mi*Mi)*conjpupfft).re - abs(fft(Mi))^2; //must be  m^-2.volts^-2
       //summing modes into dm basis
-      tmp += l(i) * Vii;
+      tmp += l(i) * Vii; //must be in meters^-2
     }
-    dphi = fft(tmp,-1).re/G;
+    dphi = fft(tmp,-1).re/G; //must be in meters^2
     //multiplynig by a mask
     msk = G/max(G) > 1e-5;
-    dphi *= msk;
-  
+    //to get the SF in rd^2
+    dphi *= 2*(2*pi/data.camir.lambda_ir)^2.;
+    OTF_tomo  = exp(-0.5*dphi*msk);
+    
   }else if(mode == "intersample"){
     map = array(0.0,N,N);
     dactupix = data.fourier.dactupix;
@@ -429,17 +440,16 @@ func dphiFromUij(Cvv,mode,verb=)
     map(rr,rr) = Cvvmap;
     corr = fft(abs(fft(fi))^2 * fft(map), -1).re / (numberof(fi) * dactupix^2) ;
     dphi = corr(ncmap,ncmap) - corr;
-    dphi = roll(dphi);
+    dphi = roll(dphi); //dphi must be in meters^2
+    //getting the phase structure function in rd^2
+    dphi *= 2*(2*pi/data.camir.lambda_ir)^2.;
+    OTF_tomo  = exp(-0.5*dphi);
   }
-
-  
-  //getting the phase structure function in rd^2
-  dphi *= 2*(2*pi/data.camir.lambda_ir)^2.;
 
   if(verb)
     write,format="done in %.3g s\n",tac(3);
 
-  return dphi;
+  return OTF_tomo;
 }
 
 /*
