@@ -532,16 +532,16 @@ func packcoeffs( data , &indfit )
   coeffList = extendList(coeffList, data.learn.altitude(1:nl));
   coeffList = extendList(coeffList, data.learn.l0h(1:nl));
   coeffList = extendList(coeffList, data.learn.tracking);
-  coeffList = extendList(coeffList, data.learn.xshift);
-  coeffList = extendList(coeffList, data.learn.yshift);
+  coeffList = extendList(coeffList, data.learn.xshift(1:data.nwfs));
+  coeffList = extendList(coeffList, data.learn.yshift(1:data.nwfs));
   
   indfit = [0.,0];
   indfit = extendList(indfit, data.learn_fit.cnh(1:nl));
   indfit = extendList(indfit, data.learn_fit.altitude(1:nl));
   indfit = extendList(indfit, data.learn_fit.l0h(1:nl));
   indfit = extendList(indfit, data.learn_fit.tracking);
-  indfit = extendList(indfit, data.learn_fit.xshift);
-  indfit = extendList(indfit, data.learn_fit.yshift);
+  indfit = extendList(indfit, data.learn_fit.xshift(1:data.nwfs));
+  indfit = extendList(indfit, data.learn_fit.yshift(1:data.nwfs));
 
   indfit = indfit( :-long(indfit(0))-1 );   // cut the "tail" of the coeff pack
   indfit = where(indfit);
@@ -587,8 +587,8 @@ func initStruct(pinit,pind)
   //tracking
   data.learn_fit.tracking = *pind(4);
   //pupil shift
-  data.learn_fit.xshift = *pind(5);
-  data.learn_fit.yshift = *pind(6);
+  data.learn_fit.xshift(1:data.nwfs) = *pind(5);
+  data.learn_fit.yshift(1:data.nwfs) = *pind(6);
 
   //..............INITIAL GUESS........................//
   //cn2h
@@ -600,8 +600,8 @@ func initStruct(pinit,pind)
   //tracking
   data.learn.tracking = *pinit(4);
   //pupil shift
-  data.learn.xshift = *pinit(5);
-  data.learn.yshift = *pinit(6);
+  data.learn.xshift(1:data.nwfs) = *pinit(5);
+  data.learn.yshift(1:data.nwfs) = *pinit(6);
 }
 
 func cnh2Struct(ptrcnh)
@@ -622,6 +622,6 @@ func cnh2Struct(ptrcnh)
   //tracking
   data.learn.tracking = *ptrcnh(4);
   //shift pupil;
-  data.learn.xshift = *ptrcnh(5);
-  data.learn.yshift = *ptrcnh(6);
+  data.learn.xshift(1:data.nwfs) = *ptrcnh(5);
+  data.learn.yshift(1:data.nwfs) = *ptrcnh(6);
 }

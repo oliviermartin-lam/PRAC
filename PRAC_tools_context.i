@@ -1048,7 +1048,7 @@ func readFile(filename,type,fake=)
   error;
 }
 
-func restorefits( filePrefix, fileSuffix, &fullName, version=, fake= )
+func restorefits( filePrefix, fileSuffix, &fullName, version=, fake=,verb= )
 /* DOCUMENT restorefits( filePrefix, fileSuffix, fullName, version=, fake= )
      Restores a FITS file from the archive.
      Argument <fullName> is an output, it contains the full path name.

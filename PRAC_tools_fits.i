@@ -183,7 +183,8 @@ func core_readfits( fic, ptr, &dataTotalByteSize, &extend )
     else if (bitpix==8 )
       datatype = char(0);
     else {
-      write,format="ERROR in formatread.i : unknown data type BITPIX=%d \n",bitpix;
+      if(0)
+        write,format="ERROR in formatread.i : unknown data type BITPIX=%d \n",bitpix;
       return [];
     }
 

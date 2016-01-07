@@ -39,8 +39,9 @@ func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
   //...... Initializes the data struct .....//
   include, "PRAC_struct_init.i",1;
   include, "PRAC_struct_config.i",1;
-  define_structs, timedata,verb=verb;
-  if(data.wfs(data.its).type == 0){
+  err = define_structs(timedata,verb=verb);
+  return 0;
+  if(data.wfs(data.its).type == 0 | err==0){
     return 0;
   }
 

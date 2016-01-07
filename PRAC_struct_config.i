@@ -39,10 +39,13 @@ func define_tel(pathdata,verb=)
 {
   extern data;
 
-  data.tel.diam = str2flt(readFitsKey(pathdata,"TELDIAM"));
-  data.tel.obs = str2flt(readFitsKey(pathdata,"TELOBS"));
-  data.tel.airm = str2flt(readFitsKey(pathdata,"WHTAIRM"));
-  data.tel.zen = acos(1./data.tel.airm)*180/pi;
+  data.tel.diam   = str2flt(readFitsKey(pathdata,"TELDIAM"));
+  data.tel.obs    = str2flt(readFitsKey(pathdata,"TELOBS"));
+  airm            = readFitsKey(pathdata,"WHTAIRM");
+  if(airm != "WHTAIRM not found"){
+    data.tel.airm   = str2flt(airm);
+    data.tel.zen    = acos(1./data.tel.airm)*180/pi;
+  }
   data.tel.object = strcase(1,readFitsKey(pathdata,"OBJECT"));
 }
 
@@ -53,42 +56,47 @@ func define_wfs(pathdata,verb=)
 {
 
   //WFS
-  data.wfs.nssp = readFitsKeyArray(pathdata,"WFSNSLO");
-  data.wfs.sX = readFitsKeyArray(pathdata,"WFSSUBX");
-  data.wfs.sY = readFitsKeyArray(pathdata,"WFSSUBY");
-  data.wfs.type = readFitsKeyArray(pathdata,"WFSTYPE");
+  nwfs                  = data.nwfs;
+  data.wfs.nssp(1:nwfs) = readFitsKeyArray(pathdata,"WFSNSLO");
+  data.wfs.sX(1:nwfs)   = readFitsKeyArray(pathdata,"WFSSUBX");
+  data.wfs.sY(1:nwfs)   = readFitsKeyArray(pathdata,"WFSSUBY");
+  data.wfs.type(1:nwfs) = readFitsKeyArray(pathdata,"WFSTYPE");
   for(i=1;i<=data.nwfs;i++){
-    data.wfs(i).pixarc = str2flt(readFitsKey(pathdata,"PIXARC"+int2str(i)));
-    data.wfs(i).unit = str2flt(readFitsKey(pathdata,"UNITMRZ"+int2str(i)));
+    data.wfs(i).pixarc  = str2flt(readFitsKey(pathdata,"PIXARC"+int2str(i)));
+    data.wfs(i).unit    = str2flt(readFitsKey(pathdata,"UNITMRZ"+int2str(i)));
   }
-  data.wfs.sym = readFitsKeyArray(pathdata,"WFSSYM");
+  data.wfs.sym(1:nwfs) = readFitsKeyArray(pathdata,"WFSSYM");
+  
   //...... Manages LGS ......//
   indlgs = where(data.wfs.type==2);
   indoffngs = readFitsKeyArray(pathdata,"OFFAX");
   nbLgsWfs = numberof(indlgs);
   
   if(is_array(indlgs)){
-    tmp = readFitsKey(pathdata,"ALTLGS");
-    if(tmp == "ALTLGS not found") tmp = "21000";
-    data.wfs(indlgs).lgsH = str2flt(tmp);
-    data.wfs(indlgs).lgsRadius = 23;
-    data.wfs(indlgs).lgsdH = 1000.;
-    data.wfs(indlgs).lgsAngle = 0.0;
+    if(numberof(indlgs == 1)){
+      data.wfs(indlgs).lgsH = 13500.;
+    }else{
+      tmp = readFitsKey(pathdata,"ALTLGS");
+      if(tmp == "ALTLGS not found") tmp = "21000";
+      data.wfs(indlgs).lgsH = str2flt(tmp);
+      data.wfs(indlgs).lgsRadius = 23;
+      data.wfs(indlgs).lgsdH = 1000.;
+      data.wfs(indlgs).lgsAngle = 0.0;
       
-    // making a square of right diameter : SCIMEASURE CAMERA
-    X = [-1,1,-1,1] * data.wfs(indlgs).lgsRadius/sqrt(2);
-    Y = [1,1,-1,-1] * data.wfs(indlgs).lgsRadius/sqrt(2);
-    // rotating the square
-    th = data.wfs(indlgs(1)).lgsAngle * pi/180;
-    rotmatrix = [[cos(th),sin(th)],[-sin(th),cos(th)]];
-    tmp = rotmatrix(,+)*[X,Y](,+);
-    X = tmp(1,);
-    Y = tmp(2,);
+      // making a square of right diameter : SCIMEASURE CAMERA
+      X = [-1,1,-1,1] * data.wfs(indlgs).lgsRadius/sqrt(2);
+      Y = [1,1,-1,-1] * data.wfs(indlgs).lgsRadius/sqrt(2);
+      // rotating the square
+      th = data.wfs(indlgs(1)).lgsAngle * pi/180;
+      rotmatrix = [[cos(th),sin(th)],[-sin(th),cos(th)]];
+      tmp = rotmatrix(,+)*[X,Y](,+);
+      X = tmp(1,);
+      Y = tmp(2,);
     
-    (data.wfs.x)(indlgs) = X(1:numberof(indlgs));
-    (data.wfs.y)(indlgs) = Y(1:numberof(indlgs));
+      (data.wfs.x)(indlgs) = X(1:numberof(indlgs));
+      (data.wfs.y)(indlgs) = Y(1:numberof(indlgs));
+    }
   }
-
   // recovered positions in mm
   suff_tas = readFitsKey(pathdata,"TAS");
   if(suff_tas == "TAS not found"){
@@ -197,35 +205,37 @@ func define_ir(pathdata,verb=)
   extern data;
   //Load raw image
   suffir = readFitsKey(pathdata,"IRFILE");
-  data.camir.psfraw = &restorefits("ir",suffir,pathir);
-  //load bg
-  suffbg = readFitsKey(pathir,"BGNAME");
-  data.camir.bg = &restorefits("irbg",suffbg);
+  if(suffir != "IRFILE not found"){
+    data.camir.psfraw = &restorefits("ir",suffir,pathir);
+    //load bg
+    suffbg = readFitsKey(pathir,"BGNAME");
+    data.camir.bg = &restorefits("irbg",suffbg);
 
-  if(dimsof(*data.camir.psfraw)(1)==3){
-    data.camir.psfraw = data.camir.psfraw(,,avg);
-  }
-  if(dimsof(data.camir.bg)(1)==3){
-    data.camir.bg = data.camir.bg(,,avg);
-  }
-  //computes the calibrated psf
-  data.camir.psfcal = &(*data.camir.psfraw - *data.camir.bg);
+    if(dimsof(*data.camir.psfraw)(1)==3){
+      data.camir.psfraw = data.camir.psfraw(,,avg);
+    }
+    if(dimsof(data.camir.bg)(1)==3){
+      data.camir.bg = data.camir.bg(,,avg);
+    }
+    //computes the calibrated psf
+    data.camir.psfcal = &(*data.camir.psfraw - *data.camir.bg);
 
-  data.camir.camName = strcase(1,readFitsKey(pathir,"IRCAM"));
-  tmp = dimsof(*data.camir.psfcal);
-  data.camir.dx = tmp(2);
-  data.camir.dy = tmp(3);
-  data.camir.xPsf = str2int(readFitsKey(pathir,"X0PSF"));
-  data.camir.yPsf = str2int(readFitsKey(pathir,"Y0PSF"));
+    data.camir.camName = strcase(1,readFitsKey(pathir,"IRCAM"));
+    tmp = dimsof(*data.camir.psfcal);
+    data.camir.dx = tmp(2);
+    data.camir.dy = tmp(3);
+    data.camir.xPsf = str2int(readFitsKey(pathir,"X0PSF"));
+    data.camir.yPsf = str2int(readFitsKey(pathir,"Y0PSF"));
   
-  //IR wavelength in m
-  data.camir.lambda_ir = str2flt(readFitsKey(pathir,"FILTER"))*1e-9;
-  data.camir.uld = str2flt(readFitsKey(pathir,"NPIXLD"));//(D * pixarcIR / lambdaIR)
-  data.camir.pixSize = data.camir.uld * data.camir.lambda_ir/data.tel.diam ;
-  data.camir.uz = (data.camir.lambda_ir * data.camir.uld/data.tel.diam)*206264.8062471;
-  data.camir.deadPixIndex = &CreateDeadPixFrame(readfits("locateDeadPixels"+data.camir.camName+".fits"));
-  //size of the cropped on-sky PSF to estimate the Strehl. 
-  data.camir.npix_sr = 128;
+    //IR wavelength in m
+    data.camir.lambda_ir = str2flt(readFitsKey(pathir,"FILTER"))*1e-9;
+    data.camir.uld = str2flt(readFitsKey(pathir,"NPIXLD"));//(D * pixarcIR / lambdaIR)
+    data.camir.pixSize = data.camir.uld * data.camir.lambda_ir/data.tel.diam ;
+    data.camir.uz = (data.camir.lambda_ir * data.camir.uld/data.tel.diam)*206264.8062471;
+    data.camir.deadPixIndex = &CreateDeadPixFrame(readfits("locateDeadPixels"+data.camir.camName+".fits"));
+    //size of the cropped on-sky PSF to estimate the Strehl. 
+    data.camir.npix_sr = 128;
+  }
 }
 
 func define_fourier(void,verb= )
@@ -299,7 +309,9 @@ func define_turbu(pathdata,verb=)
   
   //loading of the on-sky retrieved profiles from post-processing
   data.learn.nl = NL_DEF;
-  
+
+  if(strpart(procDir,0:0) != "/")
+    procDir = procDir+"/";
   goodDir = "profiles/" + procDir;
   ptr_prof = readfits(goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(NL_DEF) +".fits",err=1,verb=verb);
 

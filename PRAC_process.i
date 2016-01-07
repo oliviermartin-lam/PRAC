@@ -496,53 +496,55 @@ func PRAC_all(void)
  */
 {
   
-
-  Dir = ["2013_09_15"];
-
+  Dir  = listFile("/home/olivier/CANARY/Data/PHASE_B/");
+  Dir  = Dir(sort(Dir));
+  Dir  = Dir(7:-10);
   ndir = numberof(Dir);
-  tmpDir          = "/home/omartin/CANARY/Data/PHASE_B/tmp/stycomartin/";
+
+  tmpDir          = "/home/olivier/CANARY/Data/PHASE_B/tmp/stycomartin/";
   logFile         = tmpDir + "log.txt"; 
   dialogFile      = tmpDir + "dialogFile.txt"; 
-  dataDir 	= "/home/omartin/CANARY/Data/PHASE_B/";
+  dataDir 	= "/home/olivier/CANARY/Data/PHASE_B/";
 
   goodDir = "results/";
   if(!direxist(goodDir)) system,"mkdir " + goodDir;
   
   for(i=1;i<=ndir;i++){
-    procDir = Dir(i) + "_onsky/";
+    procDir = Dir(i);
     dataDirRoot = dataDir + procDir;
     //takes all slopestl files
     pathstl = listVersion(dataDirRoot,"fits","slopestl");
-    //keeps only the script files
-    w = where(strfind("script",pathstl)(0,) != -1);
-    pathstl = pathstl(w);
-    ntl = numberof(pathstl);
-    PRAC_res = array(pointer,32);
-    nl = 5;
-    for(j=1;j<=ntl;j++){
-      //extracts the date
-      timetl = extractTime(pathstl(j));
-      p = PRAC_main(timetl,Dir=procDir,verb=0,disp=0,mode="intersample");
-      if(is_pointer(p)){
-        //Data identity
-        for(k1=1;k1<=4;k1++){PRAC_res(k1) = & grow(*PRAC_res(k1),(strchar( (*p(1))(k1) )));}
-        //global parameters
-        for(k2=5;k2<=8;k2++){PRAC_res(k2) = & grow(*PRAC_res(k2),(*p(2))(k2-4));}
-        //turbulence profile
-        for(k3=9;k3<=11;k3++){PRAC_res(k3) = & grow(*PRAC_res(k3),(*p(3))((k3-9)*nl+1:(k3-8)*nl));}
-        //tracking
-        
-        for(k8=12;k8<=14;k8++){PRAC_res(k8) = & grow(*PRAC_res(k8),(*p(4))(k8-11));}
-        //error budget
-        for(k4=15;k4<=21;k4++){PRAC_res(k4) = & grow(*PRAC_res(k4),(*p(5))(k4-14));}
-        //Strehl ratios
-        for(k5=22;k5<=31;k5++){PRAC_res(k5) = & grow(*PRAC_res(k5),(*p(6))(k5-21));}
-        //Ensquared Energy
-        PRAC_res(32) = &grow(*PRAC_res(32),*p(7));
-      }
-      write,format="%s","Job done: " + var2str(100.*j/ntl) + "%\r";
+    if(is_array(pathstl)){
+        //keeps only the script files
+        w = where(strfind("script",pathstl)(0,) != -1);
+        pathstl = pathstl(w);
+        ntl = numberof(pathstl);
+        PRAC_res = array(pointer,32);
+        nl = 5;
+        for(j=1;j<=ntl;j++){
+          //extracts the date
+          timetl = extractTime(pathstl(j));
+          p = PRAC_main(timetl,Dir=procDir,verb=0,disp=0,mode="intersample");
+          if(is_pointer(p)){
+            //Data identity
+            for(k1=1;k1<=4;k1++){PRAC_res(k1) = & grow(*PRAC_res(k1),(strchar( (*p(1))(k1) )));}
+            //global parameters
+            for(k2=5;k2<=8;k2++){PRAC_res(k2) = & grow(*PRAC_res(k2),(*p(2))(k2-4));}
+            //turbulence profile
+            for(k3=9;k3<=11;k3++){PRAC_res(k3) = & grow(*PRAC_res(k3),(*p(3))((k3-9)*nl+1:(k3-8)*nl));}
+            //tracking
+            for(k8=12;k8<=14;k8++){PRAC_res(k8) = & grow(*PRAC_res(k8),(*p(4))(k8-11));}
+            //error budget
+            for(k4=15;k4<=21;k4++){PRAC_res(k4) = & grow(*PRAC_res(k4),(*p(5))(k4-14));}
+            //Strehl ratios
+            for(k5=22;k5<=31;k5++){PRAC_res(k5) = & grow(*PRAC_res(k5),(*p(6))(k5-21));}
+            //Ensquared Energy
+            PRAC_res(32) = &grow(*PRAC_res(32),*p(7));
+          }
+          write,format="%s","Job done: " + var2str(100.*j/ntl) + "%\r";
+        }
+      writefits, goodDir + "PRACres_" + Dir(i) +".fits",PRAC_res;
     }
-    writefits, goodDir + "PRACres_" + Dir(i) +".fits",PRAC_res;
   }
 }
 
