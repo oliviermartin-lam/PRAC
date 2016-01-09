@@ -28,87 +28,117 @@ func plotProfiles(void)
   
  */
 {
-  //initialiazing vectors...
-  cnh = alt = l0h = vh = dirh = [];//fitted values
-  dcnh = dalt = dl0h = dvh = ddirh = [];//uncertainties
 
-  listdir = listFile("profiles/");
-  ndir = numberof(listdir);
-  //managing directories
-  for(j=1;j<=ndir;j++){
-    dir      = listdir(j);
-    pathdata = "profiles/" + dir + "/";
-    listtl = listFile(pathdata);
-    ntl    = numberof(listtl);
-    dataDirRoot = dataDir + dir + "/";
-    write,format="Processing directory %s\n",dir;
-    //loop on file
-    for(i=1;i<=ntl;i++){
-      //determining the airmass
-      timetl = strpart(listtl(i),21:29);
-      restorefits,"slopestl",timetl,pathtl,fake=1;
-      object = strcase(1,readFitsKey(pathtl,"OBJECT"));
-      tmp = givesCoordinatesFromObject(object);
-      array_ra = str2flt(decoupe(tmp(1),' '));
-      array_dec = str2flt(decoupe(tmp(2),' '));
-      airm = airmassFromDate(extractDate(pathtl),array_ra,array_dec);
-      //growing results
-      ptrprof = readfits(pathdata + listtl(i));
-      cnh     = grow(cnh,*ptrprof(1)/airm);
-      alt     = grow(alt,*ptrprof(2)/airm);
-      l0h     = grow(l0h,*ptrprof(3));
-      track   = grow(track,*ptrprof(4));
-      vh      = grow(vh,*ptrprof(5));
-      dirh    = grow(dirh,*ptrprof(6));
-      dcnh    = grow(dcnh,*ptrprof(7)/airm);
-      dalt    = grow(dalt,*ptrprof(8)/airm);
-      dl0h    = grow(dl0h,*ptrprof(9));
-      dtrack  = grow(dtrack,*ptrprof(10));
-      dvh     = grow(dvh,*ptrprof(11));
-      ddirh   = grow(ddirh,*ptrprof(12));
-      
-      write,format="Loading file:%.3g%s\r",100.*i/ntl,"%";
-      
-    }
-  }
+  cnh = readfits("seeingProfile.fits");
+  l0h = readfits("l0hProfile.fits");
+  vh = readfits("vhProfile.fits");
+  alt = readfits("altProfile.fits");
+  cnh0 = readfits("seeing.fits");
+  cnhg = readfits("groundSeeing.fits");
+  cnhalt = readfits("altSeeing.fits");
+  l0eff = readfits("effL0.fits");
+  l0g = readfits("groundL0.fits");
+  l0alt = readfits("altL0.fits");
+  v0 = readfits("effV0.fits");
+  v0g = readfits("groundV0.fits");
+  v0alt = readfits("altV0.fits");
   
-  write,format="%d processed files\n",numberof(cnh)/5;
-  alt    /= 1000;
-  //computing integrated value
-  cnh0 = l0eff = v0 = cnhalt = l0alt = v0alt = cnhg = l0g = v0g = [];
-  for(i=1;i<=numberof(cnh)/5;i++){
-    cnhi   = cnh(1+(i-1)*5:5*i);
-    cnha   = cnhi(2:);
-    l0hi   = l0h(1+(i-1)*5:5*i);
-    wi     = where(l0hi<=100.)
-    vhi    = vh(1+(i-1)*5:5*i);
-    //global values
-    cnh0   = grow(cnh0,0.103/sum(cnhi)^(-3/5.));
-    if(is_array(wi))
-      l0eff  = grow(l0eff,(sum(l0hi(wi)^(5/3.)*cnhi(wi))/sum(cnhi(wi)))^(3/5.));
-    v0     = grow(v0,(sum(cnhi*vhi^(5/3.))/sum(cnhi))^(3/5.));
-    //ground values
-    cnhalt = grow(cnhalt,0.103/sum(cnha)^(-3/5.));
-    if(numberof(wi) == 1 && wi(1) != 1){
-      l0alt  = grow(l0alt,(sum(cnhi(wi)*l0hi(wi)^(5/3.))/sum(cnhi(wi)))^(3/5.));
-    }else if(is_array(wi) && numberof(wi)!=1){
-      l0alt  = grow(l0alt,(sum(cnhi(wi(2:))*l0hi(wi(2:))^(5/3.))/sum(cnhi(wi(2:))))^(3/5.));
+  if(0){
+    //initialiazing vectors...
+    cnh = alt = l0h = vh = dirh = [];//fitted values
+    dcnh = dalt = dl0h = dvh = ddirh = [];//uncertainties
+
+    listdir = listFile("profiles/");
+    ndir = numberof(listdir);
+    //managing directories
+    for(j=1;j<=ndir;j++){
+      dir      = listdir(j);
+      pathdata = "profiles/" + dir + "/";
+      listtl = listFile(pathdata);
+      ntl    = numberof(listtl);
+      dataDirRoot = dataDir + dir + "/";
+      write,format="Processing directory %s\n",dir;
+      //loop on file
+      for(i=1;i<=ntl;i++){
+        //determining the airmass
+        timetl = strpart(listtl(i),21:29);
+        restorefits,"slopestl",timetl,pathtl,fake=1;
+        object = strcase(1,readFitsKey(pathtl,"OBJECT"));
+        tmp = givesCoordinatesFromObject(object);
+        array_ra = str2flt(decoupe(tmp(1),' '));
+        array_dec = str2flt(decoupe(tmp(2),' '));
+        airm = airmassFromDate(extractDate(pathtl),array_ra,array_dec);
+        //growing results
+        ptrprof = readfits(pathdata + listtl(i));
+        cnh     = grow(cnh,*ptrprof(1)/airm);
+        alt     = grow(alt,*ptrprof(2)/airm);
+        l0h     = grow(l0h,*ptrprof(3));
+        track   = grow(track,*ptrprof(4));
+        vh      = grow(vh,*ptrprof(5));
+        dirh    = grow(dirh,*ptrprof(6));
+        dcnh    = grow(dcnh,*ptrprof(7)/airm);
+        dalt    = grow(dalt,*ptrprof(8)/airm);
+        dl0h    = grow(dl0h,*ptrprof(9));
+        dtrack  = grow(dtrack,*ptrprof(10));
+        dvh     = grow(dvh,*ptrprof(11));
+        ddirh   = grow(ddirh,*ptrprof(12));
+      
+        write,format="Loading file:%.3g%s\r",100.*i/ntl,"%";
+      
+      }
     }
-    v0alt  = grow(v0alt,(sum(cnha*vhi(2:)^(5/3.))/sum(cnha))^(3/5.));
-    //values integrated onto altitude
-    cnhg   = grow(cnhg,0.103/cnhi(1)^(-3/5.));
-    l0g    = grow(l0g,l0hi(1));
-    v0g    = grow(v0g,vhi(1));
+  
+    
+    alt    /= 1000;
+    //computing integrated value
+    cnh0 = l0eff = v0 = cnhalt = l0alt = v0alt = cnhg = l0g = v0g = [];
+    for(i=1;i<=numberof(cnh)/5;i++){
+      cnhi   = cnh(1+(i-1)*5:5*i);
+      cnha   = cnhi(2:);
+      l0hi   = l0h(1+(i-1)*5:5*i);
+      wi     = where(l0hi<=100.)
+        vhi    = vh(1+(i-1)*5:5*i);
+      //global values
+      cnh0   = grow(cnh0,0.103/sum(cnhi)^(-3/5.));
+      if(is_array(wi))
+        l0eff  = grow(l0eff,(sum(l0hi(wi)^(5/3.)*cnhi(wi))/sum(cnhi(wi)))^(3/5.));
+      v0     = grow(v0,(sum(cnhi*vhi^(5/3.))/sum(cnhi))^(3/5.));
+      //ground values
+      cnhalt = grow(cnhalt,0.103/sum(cnha)^(-3/5.));
+      if(numberof(wi) == 1 && wi(1) != 1){
+        l0alt  = grow(l0alt,(sum(cnhi(wi)*l0hi(wi)^(5/3.))/sum(cnhi(wi)))^(3/5.));
+      }else if(is_array(wi) && numberof(wi)!=1){
+        l0alt  = grow(l0alt,(sum(cnhi(wi(2:))*l0hi(wi(2:))^(5/3.))/sum(cnhi(wi(2:))))^(3/5.));
+      }
+      v0alt  = grow(v0alt,(sum(cnha*vhi(2:)^(5/3.))/sum(cnha))^(3/5.));
+      //values integrated onto altitude
+      cnhg   = grow(cnhg,0.103/cnhi(1)^(-3/5.));
+      l0g    = grow(l0g,l0hi(1));
+      v0g    = grow(v0g,vhi(1));
+    }
+
+    cnh     = 0.103/cnh^(-3/5.);
+    dcnh    = 0.103*3/5.*dcnh/cnh^(2/5.); 
+    wa      = where(alt>=20);
+    alt(wa) = 20.;
+    w0 = where(l0h<=40);
+    write,format="%.3g%s of jerk outer scale\n",100.*(1.- double(numberof(w0))/numberof(l0h)),"%s";
+
+    writefits,"seeingProfile.fits",cnh;
+    writefits,"l0hProfile.fits",l0h;
+    writefits,"vhProfiles.fits",vh;
+    writefits,"altProfile.fits",alt;
+    writefits,"seeing.fits",cnh0;
+    writefits,"groundSeeing.fits",cnhg;
+    writefits,"altSeeing.fits",cnhalt;
+    writefits,"effL0.fits",l0eff;
+    writefits,"groundL0.fits",l0g;
+    writefits,"altL0.fits",l0alt;
+    writefits,"effV0.fits",v0;
+    writefits,"groundV0.fits",v0g;
+    writefits,"altV0.fits",v0alt;
   }
-
-  cnh     = 0.103/cnh^(-3/5.);
-  dcnh    = 0.103*3/5.*dcnh/cnh^(2/5.); 
-  wa      = where(alt>=20);
-  alt(wa) = 20.;
-  w0 = where(l0h<=40);
-  write,format="%.3g%s of jerk outer scale\n",100.*(1.- double(numberof(w0))/numberof(l0h)),"%s";
-
-
+  write,format="%d processed files\n",numberof(cnh)/5;
   //..... DISPLAY .....//
   
   //Plotting altitude versus cnh
@@ -142,6 +172,7 @@ func plotProfiles(void)
   
   //Plotting altitude versus l0h
   winkill,1;window,1,dpi=90,style="aanda.gs";
+  w0 = where(l0h<=100.);
   plmk,alt(w0),l0h(w0),marker=4,msize=0.1;
   range,-1,25;
   limits,-5,40;
@@ -498,7 +529,7 @@ func PRAC_all(void)
   
   Dir  = listFile("/home/olivier/CANARY/Data/PHASE_B/");
   Dir  = Dir(sort(Dir));
-  Dir  = Dir(7:-10);
+  Dir  = Dir(12:-10);
   ndir = numberof(Dir);
 
   tmpDir          = "/home/olivier/CANARY/Data/PHASE_B/tmp/stycomartin/";
