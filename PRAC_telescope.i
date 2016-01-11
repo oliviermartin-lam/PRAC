@@ -15,19 +15,15 @@ func OTF_telescope(void)
 {
   N = data.fourier.npix;
   // computation of pupil
-  x = data.fourier.ud / (data.tel.diam/2.) * (indgen(N)-(N/2+1));   // x exprime en rayon pupille
-
+  x   =  data.fourier.ud / (data.tel.diam/2.) * (indgen(N)-(N/2+1));
   pup =  circularPupFunction(x(,-),x(-,),data.tel.obs);
+  OTF_tel = autocorrelation(pup);
   
-  // factor that will normalize the psf
-  // with PSF(0)=1.00 when diffraction-limited
-  surface_pup_m2 = data.tel.diam^2*(1-data.tel.obs^2)*pi/4;
-  surface_pup_pix = surface_pup_m2 / data.fourier.ud^2;
-  factnorm = surface_pup_pix^2;
-  // compute FTO of telescope. Computing the psf using
-  // just fft(FTO).re produces a psf with max(psf)=SR
-  // In fact, FTOtel is normalized so that sum(FTOtel)=1.
-  FTOtel = autocorrelation(pup) / factnorm;
-
-  return FTOtel;
+  // factor that will normalize the psf with PSF(0)=1.00 when diffraction-limited
+  //surface_pup_m2 = data.tel.diam^2*(1-data.tel.obs^2)*pi/4;
+  //surface_pup_pix = surface_pup_m2 / data.fourier.ud^2;
+  //factnorm = surface_pup_pix^2;
+  //OTF_tel /= factnorm;
+  OTF_tel /= sum(OTF_tel);
+  return OTF_tel;
 }

@@ -366,8 +366,9 @@ func dphiFromUij(Cvv,mode,&dphi,verb=)
   fftpup = fft(P);
   conjpupfft = conjugate(fftpup);
   G = fft(fftpup*conjpupfft,-1).re +1e-15;
-  
-  
+  den = 1./G;
+  msk = G/max(G) > 1e-5;
+   
   //defining the modes
   if(mode != "intersample"){
     fi = readfits("dm_modes.fits",err=1); // influence functions in meters
@@ -394,18 +395,16 @@ func dphiFromUij(Cvv,mode,&dphi,verb=)
         //Uij computation
         t1 = (fft(Mi*Mj)*conjpupfft).re;
         t2 = (fft(Mi)*conjugate(fft(Mj))).re;
-        Uij = fft(2*(t1 - t2),-1);
+        Uij = fft(2*(t1 - t2),[-1,-1]);
         //summing modes
-        dphi +=  ((i!=j)+1.)*Cvv(i,j)*Uij;
+        dphi +=  ((i!=j+1.))*Cvv(i,j)*Uij;
       }
     }
       //multiplynig by a mask
-      dphi = dphi.re/G;
-      G /= max(G);
-      msk = G > 1e-5;
-      dphi *= msk;
+      dphi = dphi.re * den;
       //to get the SF in rd^2
-      dphi *= (2*pi/data.camir.lambda_ir)^2.;
+      dphi *= (2*pi/data.camir.lambda_ir)^2.*msk;
+      OTF_tomo  = exp(-0.5*dphi)*msk;
       
   }else if(mode == "Vii"){
     //Diagonalizing the Cvv matrix
@@ -416,17 +415,15 @@ func dphiFromUij(Cvv,mode,&dphi,verb=)
     tmp = Mi = 0.*P;
     for(i=1;i<=data.dm.nactu;i++){
       Mi =  M(,,i); //must be in volt^2 * meter^2
-      //Vii computation
-      Vii = (fft(Mi*Mi)*conjpupfft).re - abs(fft(Mi))^2; //must be  m^-2.volts^-2
+      //Vii computation  in m^-2.volts^-2
+      Vii = (fft(Mi*Mi)*conjpupfft).re - abs(fft(Mi))^2;
       //summing modes into dm basis
       tmp += l(i) * Vii; //must be in meters^-2
     }
-    dphi = fft(tmp,-1).re/G; //must be in meters^2
-    //multiplynig by a mask
-    msk = G/max(G) > 1e-5;
+    dphi = fft(tmp,,[-1,-1]).re * den; //must be in meters^2
     //to get the SF in rd^2
-    dphi *= 2*(2*pi/data.camir.lambda_ir)^2.;
-    OTF_tomo  = exp(-0.5*dphi*msk);
+    dphi *= (2*pi/data.camir.lambda_ir)^2.*msk;
+    OTF_tomo  = exp(-0.5*dphi)*msk;
     
   }else if(mode == "intersample"){
     map = array(0.0,N,N);
@@ -438,12 +435,12 @@ func dphiFromUij(Cvv,mode,&dphi,verb=)
     nelem = (ncov-1)/2;
     rr = ncmap-nelem*dactupix:ncmap+nelem*dactupix:dactupix;
     map(rr,rr) = Cvvmap;
-    corr = fft(abs(fft(fi))^2 * fft(map), -1).re / (numberof(fi) * dactupix^2) ;
+    corr = fft(abs(fft(fi))^2*fft(map), -1).re/(numberof(fi)*dactupix^2) ;
     dphi = corr(ncmap,ncmap) - corr;
     dphi = roll(dphi); //dphi must be in meters^2
     //getting the phase structure function in rd^2
-    dphi *= 2*(2*pi/data.camir.lambda_ir)^2.;
-    OTF_tomo  = exp(-0.5*dphi);
+    dphi *= (2*pi/data.camir.lambda_ir)^2.*msk;
+    OTF_tomo  = exp(-0.5*dphi)*msk;
   }
 
   if(verb)

@@ -1,7 +1,7 @@
 func determineGlobalParameters(dataset,&p,&dp,arc=,verb=)
 /* DOCUMENT noiseVarPix = determineGlobalParameters(dataset, &rzero, &lzero, &wspeed,ings=)
    
-   Returns the variance of the noise in pix^2 for each slope of
+   Returns the variance of the noise in arcsec^2 for each slope of
    dataset (must be in pixel). Estimates rzero and lzero from
    projection of dataset on Zernike and the wind speed from the
    temporal autocorrelation.
@@ -27,7 +27,7 @@ func determineGlobalParameters(dataset,&p,&dp,arc=,verb=)
     tmpR0L0(p,) = getr0L0( dataset(slrange(icam),), icam, noise,tmpdp, i0=i0,arc=arc);
     du(p,)      = tmpdp^2;
     //get wind velocity
-    v(p)   = getWindSpeed(dataset(slrange(icam),),icam);
+    v(p)        = getWindSpeed(dataset(slrange(icam),),icam,noiseVar);
   }
 
   //derivating global turbulence parameters
@@ -304,6 +304,244 @@ func series_sum_diag(n,kmax,pidf0)
 }
 
 
+func impair(i) { return (i%2)!=0; }
+
+func pair(i) { return (i%2)==0; }
+
+
+func nm(i)
+/* DOCUMENT nm(i)
+     Pour un zernike donne, defini par son indice i, calcule les
+     ordres radiaux et azimutaux n et m.
+     La fonction renvoie le tableau [n,m].
+ */
+{
+n = int( (-1.+sqrt(8*(i-1)+1))/2.)
+p = (i-(n*(n+1))/2);
+k = n%2
+m = int((p+k)/2)*2 - k
+return [n,m]
+}
+
+
+
+func gamY(i,j)
+{
+u = nm(i);
+ni = u(1); mi = u(2);
+u = nm(j);
+n = u(1); m = u(2);
+
+if( mi==m-1 | mi==m+1 ) {
+  if( m==0 | mi==0 ) {
+    if( (m==0 & impair(i)) | (mi==0 & impair(j)) )
+      return sqrt(2*(n+1)*(ni+1));
+    else
+      return 0.00
+  }
+  else {
+    if( impair(i+j) ) {
+      if( (mi==m+1 & impair(j)) | (mi==m-1 & pair(j)) )
+        return -sqrt((n+1)*(ni+1));
+      else
+        return sqrt((n+1)*(ni+1));
+    }
+    else {
+      return 0.00;
+    }
+  }
+}
+else {
+  return 0.00;
+}
+
+}
+
+
+func gamX(i,j)
+{
+u = nm(i);
+ni = u(1); mi = u(2);
+u = nm(j);
+n = u(1); m = u(2);
+
+if( mi==(m-1) | mi==(m+1) ) {
+  if( m==0 | mi==0 ) {
+    if( (m==0 & pair(i)) | (mi==0 & pair(j)) )
+      return sqrt(2*(n+1)*(ni+1));
+    else
+      return 0.00;
+  }
+  else {
+    if( (j+i)%2==0 )
+      return sqrt((n+1)*(ni+1));
+    else
+      return 0.00;
+  }
+}
+else {
+  return 0.00;
+}
+}
+
+func gammX(n, i0)
+/* DOCUMENT gamm(n, i0)
+     Calcule la matrice de Noll GammaX ou GammaY (derivees des
+     Zernike).
+     Parametres :
+     n  = taille de la matrice.
+     i0 = premier indice a prendre en compte, i0 etant inclus
+          dans la matrice (1=piston, 2/3=tilts, etc)
+     Le resultat est un tableau GAMMA(1:n+i0-1,1:n). La premiere dimension
+     va du piston au mode le plus eleve.
+     La deuxieme dimension va du mode i0 au mode le plus eleve.
+     Pour un front d'onde 'phi', la derivee de phi s'exprime comme
+     gamma(,+) * phi(+)
+   SEE ALSO
+     gammY, gamX, gamY
+ */
+{
+gg = array(0.00,i0-1+n,n)
+for(i=i0; i<i0+n; i++)
+  for(j=1; j<=i; j++)
+    gg(j,i-i0+1) = gamX(i,j);
+return gg;
+}
+
+func gammY(n, i0)
+/* DOCUMENT gamm(n, i0)
+     Calcule la matrice de Noll GammaX ou GammaY (derivees des
+     Zernike).
+     Parametres :
+     n  = taille de la matrice.
+     i0 = premier indice a prendre en compte, i0 etant inclus
+          dans la matrice (1=piston, 2/3=tilts, etc)
+     Le resultat est un tableau GAMMA(1:n+i0-1,1:n). La premiere dimension
+     va du piston au mode le plus eleve.
+     La deuxieme dimension va du mode i0 au mode le plus eleve.
+     Pour un front d'onde 'phi', la derivee de phi s'exprime comme
+     gamma(,+) * phi(+)
+   SEE ALSO
+     gammX, gamX, gamY
+ */
+{
+gg = array(0.00,i0-1+n,n)
+for(i=i0; i<i0+n; i++)
+  for(j=1; j<=i; j++)
+    gg(j,i-i0+1) = gamY(i,j);
+return gg;
+}
+
+
+func evaluate_poly(n,m,a,r)
+  /* DOCUMENT evaluate_poly(n,m,a,r)
+     n is the radial order
+     m is the azimutal order
+     a[] is the list of coefficient, with a(i+1) the coeff of r^i
+     r is the variable of the polynomial
+  */
+{
+  if( n>1 )
+    r2 = r*r;
+
+  p = a(n+1);
+  for(i=n-2;i>=m;i-=2) {
+    p = p*r2 + a(i+1);
+  }
+  
+  if(m==0) return p;
+  else if(m==1) p*=r;
+  else if(m==2) p*=r2;
+  else p*=r^m;
+  
+  return p;
+}
+
+func Rzer(r,t,i)
+  /* DOCUMENT RTzer(r,t,i)
+
+  Meme chose que zer(r,t,i), mais ici r et t sont des tableaux 1D,
+  et le produit externe est effectue dans la fonction.
+  Du coup, le polynome(r) n'est calcule que sur les 1D-points de r,
+  le sin ou cos(m.theta) n'est calcule que sur les 1D-points de theta,
+  seul le produit est fait en externe.
+
+  Du coup, ca va TRES vite.
+
+  Pour afficher :
+  xx = r(,-)*sin(th)(-,);
+  yy = r(,-)*cos(th)(-,);
+  plf, RTzer(r,t,52),xx,yy;
+  
+   */
+{
+  if(i==1) {
+    return 0*r+1.;
+  }
+  // calcul de n et m a partir de i
+  n = int( (-1.+sqrt(8*(i-1)+1))/2.);
+  p = (i-(n*(n+1))/2);
+  k = n%2;
+  m = int((p+k)/2)*2 - k;
+
+  a = polyfute(m,n);
+  
+  Z = evaluate_poly(n,m,a,r) * sqrt(n+1)*sqrt(2);
+  if( m!=0 ) {
+    if( i%2 ) {
+      Z = Z * sin(m*t);
+    }
+    else {
+      Z = Z * cos(m*t);
+    }
+  }
+  
+  return Z;
+}
+
+
+func polyfute(m,n)
+  /* DOCUMENT polyfute(m,n)
+
+  Les coefs des poly de zer sont des K_mn(s).
+  Le coeff K_mn(s) pondère r^(n-2s)
+
+  Il y a la relation de recurrence
+  K_mn(s+1) =  K_mn(s) * ((n+m)/2-s)*((n-m)/2-s)/(s+1)/(n-s)
+
+  Il y a aussi
+  K_mn(0) = n! / ((n+m)/2)! / ((n-m)/2)!
+  
+  */
+{
+  a = array(double,n+1);
+
+  // Calcul de K_mn(0)
+  st = 2;                           // start index for dividing by ((n-m)/2)!
+  coef = 1.00;
+  for(i=(n+m)/2+1; i<=n; i++) {     // calcul de  n! / ((n+m)/2)!
+    if( st<=((n-m)/2) & i%st==0 ) {
+      j = i/st;
+      st++;
+      coef *= j;
+    } else {
+      coef *= i;
+    }
+  }
+  // division by ((n-m)/2)! (has already been partially done)
+  for(i=st;i<=(n-m)/2;i++) coef /= i;
+
+  a(n+1) = floor( coef + 0.5 );   // pour K_nm(0)
+  
+  for(i=1;i<=(n-m)/2;i++) {
+    coef *= -((n+m)/2-i+1)*((n-m)/2-i+1);
+    coef /= i;
+    coef /= (n-i+1);
+    a(n-2*i+1) = floor( coef + 0.5 );
+  }
+  return a;
+}
+
 func fitKolmo(x,a)
 {
   radorder = x(1);
@@ -457,12 +695,13 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
     //Computing slopes from single layer
     R_hl = Calt_hl(,+)*Call_1(+,);
     slopes_hl = R_hl(,+)*slopesdis(+,);
-
+    noiseVar = getNoiseVar(slopes_hl);
+    
     //Derivating the wind speed
     v = array(0.0,nngs);
     for(p=1; p<=nngs; p++) {
       icam   = ings(p);
-      v(p)   = getWindSpeed(slopes_hl(slrange(icam),),icam);
+      v(p)   = getWindSpeed(slopes_hl(slrange(icam),),icam,noiseVar);
     }
     v_h(l)  = avg(v);
     if(nngs!=1)
@@ -480,7 +719,7 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
   return vh_profile;
 }
 
-func getWindSpeed(s, icam )
+func getWindSpeed(s, icam,varNoise )
 {
 
   npt = dimsof(s)(3);                                   // number of frames in the slope set
@@ -488,14 +727,14 @@ func getWindSpeed(s, icam )
     return 0.0;
   // computes the autocorrelation
   s -= s(,avg);
-  autocor = (fft( abs(fft(s,[0,1]))^2 ,[0,1]).re)(avg,);
-  //  re-interpolate the first point : this allows us to avoid bias due to noise variance
-  auto0 = autocor(2)*2.-autocor(3);          // linear interp
-  auto0 = (autocor(2)*4.-autocor(3))/3.;     // parabolic interp
-  if( auto0!=0 )
-    autocor /= auto0;       // normalization
-  else
-    return 0.0;    // probably one has got this because all data==0
+  autocor = (fft( abs(fft(s,[0,1]))^2 ,[0,1]).re)(avg,)/dimsof(s)(0)^2/dimsof(s)(-1);
+
+  //denoising
+  autocor(1) -= avg((varNoise)(slrange(icam)));
+  autocor /= max(autocor);
+
+ 
+  //Finding the FWHM
   npt/=2;
   k=2;
   while( autocor(k)>0.5 & k<npt) k++;   // search first point below 0.5
@@ -514,10 +753,12 @@ func getWindSpeed(s, icam )
   tau0 = k / data.rtc.Fe;   // tau0 in seconds
   // windspeed
   size_ssp = data.tel.diam/data.wfs(icam).sX;
+
   if( tau0>0 )
     windspeed = 0.791*size_ssp/tau0;// factor 0.791 has been calibrated by yao simulation
   else
     windspeed=0.0;
+  
   return windspeed;
 }
 

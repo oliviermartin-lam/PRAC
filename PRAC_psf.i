@@ -7,33 +7,85 @@
                      
 */
 
-func PRAC_OTF_stats(mca,&PSF_stats)
+func polarFromCartesian(x,y)
+/* DOCUMENT
+ */
 {
-  
-  //computes static aberrations
-  stats = (*data.slopes_res)(slrange(data.its),avg);
-  F = calc_TTMatFilt_1(data.wfs(data.its).nssp);
-  stats_noTT = F(,+)*stats(+);
-  //computes the offset on the voltages
-  voffset = mca(,+) * stats_noTT(+);
-  //derives the phase from the influence functions of the DM
-  phi = pupille = array(0.,data.fourier.npix,data.fourier.npix);
-  x = (indgen(data.fourier.npix) - data.fourier.npix/2)(,-:1:data.fourier.npix)*data.fourier.ud/(data.tel.diam/2.);
-  y = transpose(x);
-  //loop on actuators
-  for(i=1;i<=data.dm.nactu;i++){
-    //metric in pupil radius
-    xx = x - (*data.dm.csX)(i);
-    yy = y - (*data.dm.csY)(i);
-    phi += voffset(i) * funcInflu(xx,yy,data.dm.x0)*(2*pi/data.camir.lambda_ir);
+  rho   = abs(x,y);
+  theta = 0*rho;
+
+  if(numberof(x) == 1){
+    theta = atan(y/x);
+    if(x>0 & y<0){
+      theta += 2*pi;
+    }else if(x<0){
+      theta += pi;
+    }else if(x==0 & y>0){
+      theta = pi/2.;
+    }else if(x==0 & y<0){
+      theta = 3*pi/2.;
+    }
+  }else{
+    w0        = where(x>0);
+    theta(*)(w0) = atan(y(*)(w0)/x(*)(w0));
+    w0        = where(x>0 & y<0);
+    theta(*)(w0) = atan(y(*)(w0)/x(*)(w0)) + 2*pi;
+    w0        = where(x<0);
+    theta(*)(w0) = atan(y(*)(w0)/x(*)(w0)) + pi;
+    w0        = where(x==0 & y>0);
+    theta(*)(w0) = pi/2.;
+    w0        = where(x==0 & y<0);
+    theta(*)(w0) = 3*pi/2.;
   }
+  return [rho,theta];
+}
+
+  
+func PRAC_OTF_stats(&PSF_stats)
+{
+
+  //defining geometry
+  N     = data.fourier.npix;
+  x     = (indgen(N) -N/2)(,-:1:N);
+  x    *= data.fourier.ud/(data.tel.diam/2.);
+  y     = transpose(x);
+  tmp   = polarFromCartesian(x,y);
+  rho   = tmp(,,1);
+  theta = tmp(,,2);
+
+  //computes static aberrations in arcsec
+  stats  = (*data.slopes_res)(slrange(data.its),avg);
+  
+  //computing the Zernike modes in radians
+  a  = (*data.wfs(data.its).mrz)(,+) * stats(+);
+  a *=  pi*data.tel.diam/(206265.*data.camir.lambda_ir);
+
+  //Generating and saving zernike modes
+  Zi = readfits("zernikeModes.fits",err=1);
+  if(is_void(Zi)){
+    Zi = array(0.0,N,N,35);
+    for(i=1;i<=35;i++){
+      Zi(,,i) = Rzer(rho,theta,i);
+    }
+    writefits,"zernikeModes.fits",Zi;
+  }
+
+  //loop on Zernike modes
+  phi  = array(0.,N,N);
+  for(i=3;i<=35;i++){
+    phi += a(i) * Zi(,,i) ;
+  }
+  
   //FTO of the telescope + abstats
-  pupille( where( abs(x,y)<= 1 & abs(x,y)> data.tel.obs) ) = 1;
-  PSF_stats = abs(fft(exp(1i*phi)*pupille))^2;
-  OTF_stats = fft(PSF_stats).re;
+  P = circularPupFunction(x,y,data.tel.obs);
+  OTF_stats = autocorrelation(P*exp(1i*phi));
+  surface_pup_m2 = data.tel.diam^2*(1-data.tel.obs^2)*pi/4;
+  surface_pup_pix = surface_pup_m2 / data.fourier.ud^2;
+  factnorm = surface_pup_pix^2;
+  OTF_stats /= factnorm;
+  PSF_stats = fft(OTF_stats).re;
   
   return OTF_stats;
-
 }
 
 func PRAC_OTF_ncpa(timedata,npix,&SR_bench,&PSF_ncpa,disp=)

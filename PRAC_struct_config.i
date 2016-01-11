@@ -189,10 +189,10 @@ func define_rtc(pathdata,verb=)
   }
 
   //grabbing interaction and calibration matrix
-  suffmi      = readFitsKey(pathdata,"MI");//in pixel/ADU
+  suffmi  = readFitsKey(pathdata,"MI");//in pixel/ADU
   mi = (3276.8*data.wfs(data.its).pixarc*restorefits("mi",suffmi))(,1:data.dm.nactu)
   data.rtc.MI = &mi; 
-  suffmc      = readFitsKey(pathdata,"MC");//in ADU/pixel
+  suffmc  = readFitsKey(pathdata,"MC");//in ADU/pixel
   mc = (restorefits("mc",suffmc)/(3276.8*data.wfs(data.its).pixarc))(1:data.dm.nactu,);
   data.rtc.MC = &mc; 
 }
@@ -348,19 +348,8 @@ func define_turbu(pathdata,verb=)
   data.uncertainties.l0h       = abs(*ptr_prof(9));
   data.learn.tracking          = *ptr_prof(4);
   data.uncertainties.tracking  = abs(*ptr_prof(10));
-
-  /*
-  getWindspeedProfile,dvh,ddirh,verb=verb;
-  ptr_prof(5)  = &data.learn.vh;
-  ptr_prof(11) = &data.uncertainties.vh;
-  writefits, goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(NL_DEF)+".fits",ptr_prof;
-  */
-  
   data.learn.vh                = abs(*ptr_prof(5));
   data.uncertainties.vh        = abs(*ptr_prof(11));
 
-
-  w = where(data.learn.l0h >=100.);
- 
 }
   

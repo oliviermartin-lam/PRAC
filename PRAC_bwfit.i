@@ -38,7 +38,7 @@ func computeFittingDphi_DMcircu_analytic(N, ud, r0tot, dactu)
 }
 
   
-func compute_DphiBwFitting(r0tot, outerScale, V,wdir,Fe,tret,gain,BP,sgeom,mode=,verb=)
+func compute_DphiBwFitting(data,sgeom,mode=,verb=)
 {
   
   // compute radial spatial frequencies in m^-1
@@ -54,7 +54,7 @@ func compute_DphiBwFitting(r0tot, outerScale, V,wdir,Fe,tret,gain,BP,sgeom,mode=
   
   
   // Wiener spectrum computation in m^-2
-  Wiener = computeWienerSpectrum(k, data.fourier.npix, r0tot, outerScale);
+  Wiener = computeWienerSpectrum(k, data.fourier.npix, data.turbu.r0ir, data.turbu.L0);
   
   
   // Computation of Dphi of fitting error .............
@@ -63,7 +63,7 @@ func compute_DphiBwFitting(r0tot, outerScale, V,wdir,Fe,tret,gain,BP,sgeom,mode=
   // spectrum Wfit if DM has square arrangement
   Dfit = Wfit = [];
   if( sgeom=="circ" ) {
-    Dfit = computeFittingDphi_DMcircu_analytic( data.fourier.npix, data.fourier.ud, r0tot, data.fourier.dactu);
+    Dfit = computeFittingDphi_DMcircu_analytic(data.fourier.npix, data.fourier.ud, data.turbu.r0ir, data.fourier.dactu);
     data.budget.fit = dphi2rms(Dfit);
   }
   else {
@@ -77,7 +77,7 @@ func compute_DphiBwFitting(r0tot, outerScale, V,wdir,Fe,tret,gain,BP,sgeom,mode=
   // of the transfer function Hcor(nu) is applied on all spatial
   // frequency k=nu/V (units equation is m^-1 = s^-1 / (m/s) ).
   // 
-  Wbp = computeBpSpectrum(k,V,wdir,Fe,tret,gain,BP,Wiener,northo,mode=mode,verb=verb);
+  Wbp = computeBpSpectrum(k,data.rtc.Fe,data.rtc.delay,data.rtc.gain,data.rtc.BP,Wiener,northo,mode=mode,verb=verb);
   
   
   // summing spectra ...........
@@ -156,7 +156,7 @@ func computeFittingWfit_DMsquare(Wiener, ndm, N,verb=)
   return Wfit;
 }
 
-func computeBpSpectrum(k,V,dir,Fe,tret,gain,BP,Wiener,northo,mode=,verb=)
+func computeBpSpectrum(k,Fe,tret,gain,BP,Wiener,northo,mode=,verb=)
 /* DOCUMENT Wbp = computeBpSpectrum(k,V,dir,Fe,tret,gain,Wiener,northo)
      
    Bandwidth error. We use the transfer function of the system,
@@ -418,9 +418,6 @@ func compute_rxy(N, ud, &xx, &yy)
   return r;
 }
 
-
-
-
 func psd2rms( W )
 {
   fact = data.fourier.uk * data.camir.lambda_ir /2/pi * 1e9;
@@ -433,28 +430,7 @@ func dphi2rms(dphi)
   return sqrt(sum(abs(fft(-0.5*data.fourier.uld*dphi)/(numberof(dphi)-1.))))*fact;
 }
 
-func computeOthers(N, nmrms_others, uk, ndm, lambdaIR)
-/* DOCUMENT 
-     
-   Autres sources d'erreur :
-   cophasing  M1 ?????
-   DM saturation, calibration and NCPA errors
 
-   SEE ALSO:
- */
-{
-  Wothers = array(0.0, N, N);
-  data.budget.ncpa = 0.00;
-
-  fact = 2*pi* nmrms_others / uk / (lambdaIR*1e9);
-  fact = fact^2;
-  tot = dimsof(ndm)(0);          // number of pixels within dm space, avoid doing sum(...) to normalize
-  Wothers(ndm) = fact / double(tot);
-  data.budget.ncpa = psd2rms(Wothers);
-  
-  return Wothers;
-
-}
 
 
 

@@ -415,13 +415,13 @@ func covMat1layer(nbWfs, l,cnh_hl, hl, l0h_hl,xshift,yshift,loworder=,singleWFS=
     if(singleWFS){m = singleWFS;}
     else{m=p;}
     
-    dipl = compute_dipl(data.wfs(m).sX, data.tel.diam, hl, data.wfs(m).x/206265., data.wfs(m).y/206265., data.wfs(m).lgsH,xshift(m),yshift(m),obs=data.tel.obs);
+    dipl = compute_dipl(data.wfs(m).sX, data.tel.diam, hl, data.wfs(m).x/206265., data.wfs(m).y/206265., data.wfs(m).lgsH,xshift(p),yshift(p),obs=data.tel.obs);
     
     for(q=p; q<=nbWfs; q++) {       // boucle 2 sur les asos
       if(singleWFS){n = singleWFS;}
       else{n=q;}
       
-      djql = compute_dipl(data.wfs(n).sX, data.tel.diam, hl, data.wfs(n).x/206265., data.wfs(n).y/206265., data.wfs(n).lgsH,xshift(n),yshift(n),obs=data.tel.obs);
+      djql = compute_dipl(data.wfs(n).sX, data.tel.diam, hl, data.wfs(n).x/206265., data.wfs(n).y/206265., data.wfs(n).lgsH,xshift(q),yshift(q),obs=data.tel.obs);
 
 
       if(data.wfs(m).type!=0 && data.wfs(n).type!=0 ) {   // if both WFS are valid ones

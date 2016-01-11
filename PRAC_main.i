@@ -13,6 +13,7 @@ include, "PRAC_tools_fits.i";
 include, "PRAC_tools_math.i";
 include, "PRAC_tools_turbu.i";
 include, "PRAC_tools_display.i";
+include, "zer.i";
 
 pldefault,font="times";
 pltitle_font = "times";
@@ -39,32 +40,33 @@ func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
   //...... Initializes the data struct .....//
   include, "PRAC_struct_init.i",1;
   include, "PRAC_struct_config.i",1;
-  err = define_structs(timedata,verb=verb);
-  return 0;
-  if(data.wfs(data.its).type == 0 | err==0){
+  define_structs, timedata,verb=verb;
+
+  if(data.wfs(data.its).type == 0){
     return 0;
   }
 
+  airyPeak = (pi/4)*(1 - data.tel.obs^2) * data.camir.uld^2;
   //..... Derivation of the perfect telescope OTF .....//
-  OTF_tel_tmp = OTF_telescope();
+  OTF_tel = OTF_telescope();
 
   //...... Derivation of the phase structure functions DPHI_bwfit from mixed bandwidth and fitting error .....//
-    
-  //mca = *data.rtc.MC;
+
+  mca = *data.rtc.MC;//mac in volts/arcsec
   if(is_void(mca)){
     mia = intermat(data.dm);
     mca = computeCommandMat(mia, nmf=-1, condi=30., disp=0);
   }
 
   // Derivation of the phase structure function from the bw + fit errors in radians^2
-  if(is_void(geo)) geo = "square";
+  if(is_void(geo)) geo = "circ";
   
-  DPHI_bwfit = compute_DphiBwFitting(data.turbu.r0ir, data.turbu.L0, data.turbu.v,data.turbu.dir,data.rtc.Fe,data.rtc.delay,data.rtc.gain,data.rtc.BP,geo,mode=data.rtc.obsmode,verb=verb);
-  OTF_bwfit  = exp(-0.5*DPHI_bwfit);
-  
+  DPHI_bwfit = compute_DphiBwFitting(data,geo,mode=data.rtc.obsmode,verb=verb);
+  OTF_bwfit = exp(-0.5*DPHI_bwfit);
+
+
   //...... Derivation of the OTF from static aberration except NCPA .....//
-  OTF_stats_tmp  = PRAC_OTF_stats(mca,PSF_stats);
-  OTF_stats_tmp /= max(OTF_stats_tmp);
+  OTF_stats  = PRAC_OTF_stats(PSF_stats);//telescope included
   
   //..... Derivation of the error tomographic residual covariance matrix in arcsec^2 .....//
   Cee = computesCeeMatrix(data.rtc.obsmode,verb=verb);
@@ -76,9 +78,9 @@ func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
 
   //computing the phase structure function from the tomo error in rd^2
   OTF_tomo = dphiFromUij(Cvv,mode,DPHI_tomo,verb=verb);
-   
+
   //...... Derivation of the OTF from bandwidth,fitting and tomographic error .....//
-  OTF_dyn_tmp =  OTF_tomo * OTF_bwfit;
+  OTF_dyn =  OTF_tomo * OTF_bwfit;
    
   //manages the size of the fourier support to get the same pixel scale
   //of the IR cam as on-sky: N' = (uz*N)/uz'
@@ -87,22 +89,20 @@ func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
   npix2 = int(data.fourier.uz * npix/data.camir.uz);
   
   if(npix2 > npix){
-    OTF_dyn = OTF_stats = OTF_tel = array(0.,npix2,npix2);
-    nm = (npix2-npix)/2+1;
-    np = (npix2+npix)/2;
-    OTF_dyn(nm:np,nm:np)   = roll(OTF_dyn_tmp);
-    OTF_tel(nm:np,nm:np)   = roll(OTF_tel_tmp);
-    OTF_stats(nm:np,nm:np) = roll(OTF_stats_tmp);
+    OTF_dyn2 = OTF_stats2 = OTF_tel2 = array(0.,npix2,npix2);
+    nm = (npix2-npix)/2+1; np = (npix2+npix)/2;
+    OTF_dyn2(nm:np,nm:np)   = roll(OTF_dyn);
+    OTF_tel2(nm:np,nm:np)   = roll(OTF_tel);
+    OTF_stats2(nm:np,nm:np) = roll(OTF_stats);
   }else{
-    OTF_dyn = OTF_stats = OTF_tel = array(0.,npix,npix);
-    nm = (npix-npix2)/2+1;
-    np = (npix+npix2)/2;
-    OTF_dyn = roll(roll(OTF_dyn_tmp)(nm:np,nm:np));
-    OTF_tel =  roll(roll(OTF_tel_tmp)(nm:np,nm:np)+1e-15);
-    OTF_stats =  roll(roll(OTF_stats_tmp)(nm:np,nm:np));
+    OTF_dyn2 = OTF_stats2 = OTF_tel2 = array(0.,npix,npix);
+    nm = (npix-npix2)/2+1; np = (npix+npix2)/2;
+    OTF_dyn2   = roll(roll(OTF_dyn)(nm:np,nm:np));
+    OTF_tel2   =  roll(roll(OTF_tel)(nm:np,nm:np))+1e-15;
+    OTF_stats2 =  roll(roll(OTF_stats)(nm:np,nm:np));
   }
 
-  OTF_ts = OTF_dyn * OTF_stats/(OTF_tel);
+  OTF_ts = OTF_dyn2 * OTF_stats2/(OTF_tel2);
   
   //product of all FTO but ncpa's one
   PSF_ts = roll( fft(OTF_ts).re );
@@ -127,7 +127,6 @@ func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
   //..... Derivation of the residual PSF .....//
   PSF_res  = roll( fft(OTF_res).re );
   PSF_res /= sum(PSF_res);
-  airyPeak = (pi/4)*(1 - data.tel.obs*data.tel.obs) * data.camir.uld * data.camir.uld ;
   PSF_res /= airyPeak;
 
   //diff
@@ -144,9 +143,9 @@ func PRAC_main(timedata,mode=,Dir=,verb=,disp=,budgetonly=)
 
   data.budget.SRsky = 100*SR_sky;
 
-  SR_tomo = exp(-(2*pi*dphi2rms(DPHI_tomo) *1e-9/data.camir.lambda_ir)^2);
-  SR_bwfit = exp(-(2*pi*dphi2rms(DPHI_bwfit) *1e-9/data.camir.lambda_ir)^2);
-  SR_stats = max(PSF_stats/sum(PSF_stats)/airyPeak);
+  SR_tomo  = sum(OTF_tomo*OTF_tel);
+  SR_bwfit = sum(OTF_bwfit*OTF_tel);
+  SR_stats = sum(OTF_stats)
   data.budget.SRres = SR_res = max(PSF_res);
   PSF_diff = abs(PSF_sky - PSF_res);
   diffPSF = sum(PSF_diff(*)^2)/sum(PSF_sky(*)^2);
