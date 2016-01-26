@@ -210,8 +210,17 @@ struct psf_struct{
   pointer sky;
   pointer res;
   pointer diff;
+  pointer ncpa;
   pointer EE_res;
   pointer EE_sky;
-  double SR_res;
-  double SR_sky;
+  double  SR_res;
+  double  SR_sky;
+  double  SR_tomo;
+  double  SR_bw;
+  double  SR_fit;
+  double  SR_stats;
+  double  SR_cpa;
+  double  FWHM_res;
+  double  FWHM_sky;
+  
 }

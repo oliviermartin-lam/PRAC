@@ -768,3 +768,11 @@ func getEE(a,z,boxsize)
   
 }
 
+func var2sr(WFE,lambda)
+{
+  return exp(-(WFE*2*pi*1e-9/lambda)^2)
+}
+func sr2var(SR,lambda)
+{
+  return sqrt(-log(SR))*lambda*1e9/2/pi;
+}

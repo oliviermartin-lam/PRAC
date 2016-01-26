@@ -13,7 +13,7 @@
                                                     
 */
 
-func determinesSlopesdisFromSlopestl(void,arcsec=)
+func determinesSlopesdisFromSlopestl(timetl)
 /*DOCUMENT slopesdis = determinesSlopesdisFromSlopestl(timetl)
 
   Computes what the TS would see in open-loop from slopestl given by
@@ -23,6 +23,49 @@ func determinesSlopesdisFromSlopestl(void,arcsec=)
  */
 {
 
+
+
+  slopestl = returnSlopestl(timetl,pathtl,arcsec=1);
+  symTS = readFitsKeyArray(pathtl,"WFSSYM")(0);
+  NslopesTS = readFitsKeyArray(pathtl,"WFSNSLO")(0);
+  //loads voltages
+  suffvolts = readFitsKey(pathtl,"VOLTFILE");
+  if(suffvolts == "VOLTFILE not found")
+    return 0;
+  
+  ptr_volts = restorefits("voltstl",suffvolts,pathvolts);
+  if(dimsof(*ptr_volts(1))(1) == 0)
+    return 0;
+  //manages voltages
+  voltsDM = *ptr_volts(1);//54xNframes matrix in voltages
+
+  //loads Interaction Matrix
+  suffMI = readFitsKey(pathtl,"MI");
+  if(suffMI == "MI not found")
+    return 0;
+  
+  MI = 3276.8*wfs(rtc.its).pixSize*restorefits("mi",suffMI,pathMI);//72x54 matrix in pixel/ADU
+  
+  //computes delay
+  Fe = str2flt(readFitsKey(pathtl,"FREQ"));
+  retard = 0.003*Fe + 1.05; //extrapolation
+  fr= int(retard);
+  coef = retard%1;
+  
+  slopesdis = slopestl;
+  
+  //convolution of the voltages
+  vconv = coef*roll(voltsDM,[0,fr+1]) + (1.-coef)*roll(voltsDM,[0,fr]);
+  //estimation of the corrected raw slopes
+  rawslopes = MI(,+)*vconv(+,);
+  //flip of the WFS
+  slopesv = mirror_SH7(rawslopes, symTS);
+  //adds to engaged slopes
+  slopesdis(slrange(rtc.its),) -= slopesv;
+  slopesdis = slopesdis(,3:-2);
+
+
+  /*
   slopesdis = *rtc.slopes_res;
   volts = *rtc.volts;//in volts
   mi    = *rtc.mi; //in arcsec/volts
@@ -30,6 +73,7 @@ func determinesSlopesdisFromSlopestl(void,arcsec=)
   frameDelay = rtc.frameDelay;
   fr= int(frameDelay);
   coef = frameDelay%1;
+
   //adds to engaged slopes
   if(rtc.obsMode != "LTAO"){
     //convolution of the voltages
@@ -40,7 +84,7 @@ func determinesSlopesdisFromSlopestl(void,arcsec=)
     slopesv = mirror_SH7(rawslopes, wfs(rtc.its).sym);
 
     slopesdis(slrange(rtc.its),) -= slopesv;
-    
+    error;
   }else{
     //convolution of the voltages: to be determined for LTAO
     //vconv = coef*roll(volts,[0,*rtc.frameDelay+1]) + (1.-coef)*roll(volts,[0,*rtc.frameDelay]);
@@ -52,7 +96,7 @@ func determinesSlopesdisFromSlopestl(void,arcsec=)
     slopesdis -= slopesv;
   }
   slopesdis = slopesdis(,3:-2);
-
+  */
   return slopesdis;
 
 }

@@ -312,14 +312,14 @@ func defineRtc(timedata,verb=)
   if(suffvolts != "VOLTFILE not found"){
     ptr_volts = restorefits("voltstl",suffvolts,pathvolts);
     if(dimsof(*ptr_volts(1))(1) != 0)
-      rtc.volts =&((adu2volt*(*ptr_volts(1)))(1:-2,));//exclusion of steering mirror for LGS
+      rtc.volts =&(((*ptr_volts(1)))(1:-2,));//exclusion of steering mirror for LGS
   }
 
   // .... Residual slopes
   rtc.slopes_res = &returnSlopestl(timedata,pathdata,arcsec = 1);
 
   // .... Reconstructed uncorrected slopes
-  rtc.slopes_dis = &determinesSlopesdisFromSlopestl(timedata,arcsec=1);
+  rtc.slopes_dis = &determinesSlopesdisFromSlopestl(timedata);
   rtc.nFrames = dimsof(*rtc.slopes_dis)(0);
   rtc.nSlopes = dimsof(*rtc.slopes_dis)(-1);
 
@@ -357,7 +357,13 @@ func defineAtm(pathdata,&varNoise,verb=)
     write,format="Windspeed      = %.3g m/s +/- %.2g\n",atm.v,dp(3);
   }
 
-
+  //slopes covariance matrix
+  s = *rtc.slopes_dis;
+  s -= s(,avg);
+  covslopes = s(,+)*s(,+)/rtc.nFrames;
+  covslopes  = handle_tilt_from_wfstype(covslopes);
+  covMatrix.slopes = &covslopes;
+  
   //noise covariance matrix
   covnoise = array(0.,rtc.nSlopes,rtc.nSlopes);
   takesDiag(covnoise) = varNoise;
@@ -396,7 +402,21 @@ func defineAtm(pathdata,&varNoise,verb=)
   atm.altitude = *ptr_prof(2);
   atm.l0h      = abs(*ptr_prof(3));
   atm.vh       = abs(*ptr_prof(5));
-  sys.tracking     = *ptr_prof(4);
+  sys.tracking = *ptr_prof(4);
+
+  // Re doing windspeed profile estimation
+  learn.nl = atm.nLayers;
+  learn.cnh = atm.cnh;
+  learn.altitude = atm.altitude;
+  learn.l0h = atm.l0h;
+  learn.magnification = sys.magnification;
+  learn.xshift = sys.xshift;
+  learn.yshift = sys.yshift;
+  learn.theta = sys.theta;
+  getWindspeedProfile,dvh,ddirh,verb=verb;
+  ptr_prof(5)  = &atm.vh;
+  writefits, goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(nl)+".fits",ptr_prof;
+  
 }
 
 
@@ -474,11 +494,7 @@ func defineCovMat(varNoise,verb=)
   if(verb){
       write,"\rComputing slopes covariance matrix...";
   }
-  s = *rtc.slopes_dis;
-  s -= s(,avg);
-  covslopes = s(,+)*s(,+)/rtc.nFrames;
-  covslopes  = handle_tilt_from_wfstype(covslopes);
-  covMatrix.slopes = &covslopes;
+ 
   
 
   //Phase gradient synthetic matrix

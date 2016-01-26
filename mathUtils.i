@@ -187,6 +187,27 @@ func inverse_mat(mat , nfilt, &s)
     m1 =  (u*s1(-,))(,+) * vt(+,);
     return m1;
 }
+func getFWHM(g,Fe)
+{
+
+  nf = numberof(g);
+  // determining the FWHM on the y autocorrelation
+  npt =nf/2;
+  k=2;
+  while( g(k)>0.5 & k<npt) k++;   // search first point below 0.5
+  // linear regression on 5 points around the half-max point
+  if( (k-2)>3 & (k+2)<npt ) {
+    y = g(k-2:k+2);
+    x = indgen(k-2:k+2);
+    tmp = (avg(x*x)-avg(x)^2.);
+    a = (avg(y*x)-avg(x)*avg(y))/tmp;
+    b = avg(y) - a*avg(x);
+    k = (0.5-b)/a;  // solve equation a*k+b = 0.5
+  }
+  tau0 = k /Fe;   // tau0 in seconds
+
+  return tau0;
+}
 func giveTomoMode(wfstype,OBS_MODE,RECTYPE)
 /*DOCUMENT
  */

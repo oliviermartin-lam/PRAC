@@ -329,12 +329,12 @@ func computeFakeOTFncpa(SR_ncpa)
   
   //defining the frequency mask of the DM
   k = computeSpatialFreqRad(N, tel.fourierPixSize, kx, ky);
-  msk = defineDmFrequencyArea(k, kx, ky,"circ", tel.pitch );
+  msk = defineDmFrequencyArea(k, kx, ky,"circle", tel.pitch );
   ndm = where( msk );
   northo = where( !msk );
   //filling the PSD
-  tot = numberof(ndm);      
-  PSD_ncpa(ndm) = fact / double(tot);
+  tot = numberof(northo);      
+  PSD_ncpa(northo) = fact / double(tot);
 
   //determining the phase structure function
   PSD_ncpa(N/2,N/2) = 0.0;
@@ -352,7 +352,7 @@ func computeFakeOTFncpa(SR_ncpa)
 
   return OTF_ncpa;
 }
-func getOTFncpa(nPixels,&SR_bench,&PSF_ncpa,disp=)
+func getOTFncpa(nPixels,procDir,&SR_bench,&PSF_ncpa,disp=)
 {
 
   // .... finding the directories where ncpa calibration are storaged

@@ -125,42 +125,42 @@ func tracePupilles(coeffs, posx, posy)
   hmax = max(max(alt),100.);
 
   // drawing of the LGS printhrough on highest layer
-  lgsH = data.wfs.lgsH;
+  lgsH = wfs.lgsH;
   nn = where(lgsH>0);
   if( is_array(nn) )
     lgsH(nn) = 1./lgsH(nn);           // inverse of lgs altitude (0 for ngs)
 
-  pupdiam = 206265.*(data.tel.diam*max((1./hmax - lgsH),0));
+  pupdiam = radian2arcsec*(tel.diam*max((1./hmax - lgsH),0));
   // rescaling of pupil size in terms of layer altitude and lgs altitude
-  xaso = data.wfs.x;
-  yaso = data.wfs.y;
+  xaso = wfs.x;
+  yaso = wfs.y;
   // fitted asterism
-  fact = regress([xaso,yaso](*), [data.wfs.x,data.wfs.y](*),ab=1);
+  fact = regress([xaso,yaso](*), [wfs.x,wfs.y](*),ab=1);
   fact = fact(1);
   fact = 1.00; // finalement, non. Enfin pour l instant.
-  for(i=1;i<=data.nwfs;i++) {
+  for(i=1;i<=rtc.nWfs;i++) {
     linetype = 1;                            // solid line
-    if( i==data.its ) linetype = 3;          // dash-dot
-    if( data.wfs.type(i)==0 ) linetype = 0;  // none
-    cercle, pupdiam(i)/2, center=[xaso(i),yaso(i)], type=linetype, col=["blue","green","magenta","white"](data.wfs.type(i));
+    if( i==rtc.its ) linetype = 3;          // dash-dot
+    if( wfs.type(i)==0 ) linetype = 0;  // none
+    cercle, pupdiam(i)/2, center=[xaso(i),yaso(i)], type=linetype, col=["blue","green","magenta","white"](wfs.type(i));
   }
 
-  if(data.rtc.ptrlistLgs)
-    plmk, yaso(*data.rtc.ptrlistLgs)/fact, xaso(*data.rtc.ptrlistLgs)/fact, color = "green", marker = 4, width=10, msize=0.8;
+  if(is_array(*rtc.ptrListLgs))
+    plmk, yaso(*rtc.ptrListLgs)/fact, xaso(*rtc.ptrListLgs)/fact, color = "green", marker = 4, width=10, msize=0.8;
 
-  if(data.rtc.ptrlistOffAxisNgs)
-    plmk, yaso(*data.rtc.ptrlistOffAxisNgs)/fact, xaso(*data.rtc.ptrlistOffAxisNgs)/fact, color = "green", marker = 4, msize=0.8;
+  if(is_array(*rtc.ptrListOffAxisNgs))
+    plmk, yaso(*rtc.ptrListOffAxisNgs)/fact, xaso(*rtc.ptrListOffAxisNgs)/fact, color = "green", marker = 4, msize=0.8;
  
   
   // initial values that were initially in the tomo structure
-  ix = data.wfs.x;
-  iy = data.wfs.y;
+  ix = wfs.x;
+  iy = wfs.y;
  
   // theoretical asterism
-  if(data.rtc.ptrlistLgs)
-    plmk,iy(*data.rtc.ptrlistLgs), ix(*data.rtc.ptrlistLgs), color = "red", marker = 6, width=10;
-  if(data.rtc.ptrlistOffAxisNgs)
-    plmk,iy(*data.rtc.ptrlistOffAxisNgs), ix(*data.rtc.ptrlistOffAxisNgs), color = "red", marker = 6;
+  if(is_array(*rtc.ptrListLgs))
+    plmk,iy(*rtc.ptrListLgs), ix(*rtc.ptrListLgs), color = "red", marker = 6, width=10;
+  if(rtc.ptrListOffAxisNgs)
+    plmk,iy(*rtc.ptrListOffAxisNgs), ix(*rtc.ptrListOffAxisNgs), color = "red", marker = 6;
   // central position
   plmk, posy, posx, color="blue", marker = 6;
   
@@ -401,12 +401,12 @@ func fullVisuMap( Caa )
   tmpx = dimsof(Caa)(2);
   tmpy = dimsof(Caa)(3);
 
-  nssp = data.wfs(1).sX;
-  nbx = data.wfs(1).nssp/2;
+  nssp = wfs(1).nLenslet;
+  nbx = wfs(1).nValidSubAp;
   n = nssp*2-1;
 
-  tmpx /= data.wfs(1).nssp;
-  tmpy /= data.wfs(1).nssp;
+  tmpx /= wfs(1).nValidMeas;
+  tmpy /= wfs(1).nValidMeas;
 
   map = array(0.,(nssp*2-1)*2*tmpx,(nssp*2-1) *2*tmpy);
     
@@ -426,9 +426,9 @@ func fullVisuMap( Caa )
 func visuMap( Caa, icam)
 {
 
-  nssp = data.wfs(icam).sX;
-  nbx = data.wfs(icam).nssp/2;
-  n = data.wfs(icam).sX*2-1;
+  nssp = wfs(icam).nLenslet;
+  nbx = wfs(icam).nValidSubAp;
+  n = wfs(icam).nLenslet*2-1;
   
   map = array(0.,n*2,n*2);
   map(1:n,1:n) = getCovMap(Caa(1:nbx,1:nbx),nssp); //yy
@@ -451,7 +451,7 @@ func getCovMap(Caa, nssp)
   y = transpose(x);
   r = sqrt(x^2+y^2);
   param = 1.07;
-  msk = r<param & r>data.tel.obs;
+  msk = r<param & r>tel.obs;
   nn = where(msk);
   // indices de la carte 2D carree de taille nsspXnssp, ou il y a 'vraiment' des sous-pupilles
 

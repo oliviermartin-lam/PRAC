@@ -2,18 +2,16 @@ func computeOTFbandwidth(geometry,obsMode,verb=)
 /* DOCUMENT
  */
 {
-  // .... PSD computing using the Wiener expression
+  //r0 at cam.lambda
   r0tot = atm.r0*(cam.lambda/atm.lambda)^1.2;
-  k = computeSpatialFreqRad(tel.nPixels, tel.fourierPixSize, kx, ky);
-  Wiener = computeWienerSpectrum(k, tel.nPixels, r0tot, atm.L0);
   
   // .... Defining the frequency aera correctable by the DM
+  k = computeSpatialFreqRad(tel.nPixels, tel.fourierPixSize, kx, ky);
   msk = defineDmFrequencyArea(k, kx, ky, geometry, dm.pitch );
-  ndm    = where( msk );
   northo = where( !msk );
 
   // .... Multipling by the system Z-transfer function at each altitude
-  PSD_bw = computePSDbandwidth(k,rtc.Fe,rtc.delay,rtc.loopGain,rtc.BP,Wiener,northo,mode=obsMode,verb=verb);
+  PSD_bw = computePSDbandwidth(k,rtc.Fe,rtc.delay,rtc.loopGain,rtc.BP,northo,mode=obsMode,verb=verb);
 
   // .... Retrieving the phase structure function
   N = tel.nPixels;
@@ -25,7 +23,7 @@ func computeOTFbandwidth(geometry,obsMode,verb=)
 
   return OTF_bw;
 }
-func computePSDbandwidth(k,Fe,tret,gain,BP,Wiener,northo,mode=,verb=)
+func computePSDbandwidth(k,Fe,tret,gain,BP,northo,mode=,verb=)
 /* DOCUMENT Wbp = computeBpSpectrum(k,V,dir,Fe,tret,gain,Wiener,northo)
      
    Bandwidth error. We use the transfer function of the system,
@@ -38,15 +36,18 @@ func computePSDbandwidth(k,Fe,tret,gain,BP,Wiener,northo,mode=,verb=)
  */
 {
 
+  //Instantiation
+  N = tel.nPixels;
+  PSD_bw   = 0*k;
 
-  PSD_bw   = 0*Wiener;
-  r0tot = atm.r0*(cam.lambda/atm.lambda)^1.2;
-  cnh   = atm.cnh;
+  //r0 at cam.lambda
+  r0tot = (sum(atm.cnh)^(-3/5.))*(cam.lambda/atm.lambda)^1.2;
+  //r0^(-5/3.) at cam.lambda
+  cnh   = atm.cnh * r0tot^(-5/3.)/sum(atm.cnh);
   l0    = atm.l0h;
-  vh    = 3*atm.vh;
-  //Compensation of the model unaccuracy of the spatial covariance
-  cnh *= r0tot^(-5/3.)/sum(cnh);
+  vh    = atm.vh;
 
+  //adding turbulent layers
   for(l = 1;l<=atm.nLayers;l++){
     nu_l = k * vh(l)/sqrt(2);
     if(mode == "MOAO"){
@@ -57,7 +58,7 @@ func computePSDbandwidth(k,Fe,tret,gain,BP,Wiener,northo,mode=,verb=)
     PSD_bw +=  abs(hcor) * 0.023 * cnh(l) * (k^2 + 1./l0(l)^2.)^(-11/6.);
   }
 
-  N = tel.nPixels;
+ 
   PSD_bw(N/2+1,N/2+1) = 0;
   PSD_bw(northo) = 0.00;
 
@@ -151,7 +152,7 @@ func defineDmFrequencyArea(k, kx, ky, sgeom, pitch )
 {
   fc = 0.5/pitch;
   
-  if( sgeom=="circ" )
+  if( sgeom=="circle" )
     msk = k < fc;
   else
     msk = (kx < fc) & (kx > -fc) & (ky < fc) & (ky > -fc);

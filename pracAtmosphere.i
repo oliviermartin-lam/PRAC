@@ -24,10 +24,10 @@ func determineGlobalParameters(dataset,&p,&dp,arc=,verb=)
     // get noise in mic^2
     noise       = getNoiseZernike(noiseVar(slrange(icam)), icam, full=1, inputNoise=1,arc=arc);
     // get r0 and L0 from Zernike variance fitting
-    tmpR0L0(p,) = getr0L0( dataset(slrange(icam),), icam, noise,tmpdp, i0=4,arc=arc);
+    tmpR0L0(p,) = getr0L0( dataset(slrange(icam),), icam, noise,tmpdp, i0=3,arc=arc);
     du(p,)      = tmpdp^2;
     //get wind velocity
-    v(p)        = getWindSpeed(dataset(slrange(icam),),icam,noiseVar);
+    v(p)        = getWindSpeed(dataset(slrange(icam),),icam,noiseVar(slrange(icam)));
   }
 
   //derivating global turbulence parameters
@@ -155,7 +155,7 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
   learn.diagonal = 0;
   learn.ttr      = 0;
   learn.tracking = 0;
-  sys.tracking   = [0,0,0];
+
 
   //..... Derivating the WFS measurements covariance matrix to be inverted .....//
 
@@ -163,6 +163,7 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
   Call = covMatModel(learn, fitEstim,verb=verb);
   //adding noise and managing TT
   Call += *covMatrix.noise;
+
   //determines number of modes to be filtered for the inversion
   condCaa = 100.;
   mode = computeModesToBeFiltered(Call,rtc.its,condCaa = condCaa);
@@ -191,19 +192,22 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
     learn.l0h(1) = l0hall(l);
     
     //altitude covariance matrix computation;
+    if(learn.altitude(1) >50)
+      learn.tracking = [0,0,0];
+    
     fitEstim = packcoeffs(learn);
-    Calt_hl = covMatModel(learn,fitEstim,verb=verb,loworder=1);
+    Calt_hl = covMatModel(learn,fitEstim,verb=verb);
 
     //Computing slopes from single layer
-    R_hl = Calt_hl(,+)*Call_1(+,);
+    R_hl = Calt_hl(,+)*Call_1(,+);
     slopes_hl = R_hl(,+)*slopesdis(+,);
     noiseVar = getNoiseVar(slopes_hl);
-    
+
     //Derivating the wind speed
     v = array(0.0,nngs);
     for(p=1; p<=nngs; p++) {
       icam   = ings(p);
-      v(p)   = getWindSpeed(slopes_hl(slrange(icam),),icam,noiseVar);
+      v(p)   = getWindSpeed(slopes_hl(slrange(icam),),icam,noiseVar(slrange(icam)));
     }
     v_h(l)  = avg(v);
     if(nngs!=1)
@@ -219,47 +223,33 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
   return vh_profile;
 }
 
-func getWindSpeed(s, icam,varNoise )
+func getWindSpeed(s, icam,varNoise,&dir )
 {
 
-  npt = dimsof(s)(3);                                   // number of frames in the slope set
-  if( npt<5 )     // meaningless result anyway
-    return 0.0;
   // computes the autocorrelation
-  s -= s(,avg);
-  autocor = (fft( abs(fft(s,[0,1]))^2 ,[0,1]).re)(avg,)/dimsof(s)(0)^2/dimsof(s)(-1);
-
+  s      -= s(,avg);
+  nf     = dimsof(s)(3);    
+  autocor = autocorrelation(s);
+  autocor = fft(abs(fft(s,[0,1]))^2,[0,1]).re/nf^2;
+    
   //denoising
-  autocor(1) -= avg((varNoise)(slrange(icam)));
-  autocor /= max(autocor);
+  autocor(,1) -= varNoise;
+  autocor     /= autocor(,max);
+  a_x = (autocor(1:wfs(icam).nValidSubAp,))(avg,);
+  a_y = (autocor(wfs(icam).nValidSubAp+1:,))(avg,);
+  
+  tau0_x = getFWHM(a_x,rtc.Fe);
+  tau0_y = getFWHM(a_y,rtc.Fe);
 
- 
-  //Finding the FWHM
-  npt/=2;
-  k=2;
-  while( autocor(k)>0.5 & k<npt) k++;   // search first point below 0.5
-  // linear regression on 5 points around the half-max point
-  if( (k-2)>3 & (k+2)<npt ) {
-    y = autocor(k-2:k+2);
-    x = indgen(k-2:k+2);
-    tmp = (avg(x*x)-avg(x)^2.);
-    a = (avg(y*x)-avg(x)*avg(y))/tmp;
-    b = avg(y) - a*avg(x);
-    if( a<0 )
-      k = (0.5-b)/a;  // solve equation a*k+b = 0.5
-    else
-      k=0;
-  }
-  tau0 = k / rtc.Fe;   // tau0 in seconds
   // windspeed
   size_ssp = tel.diam/wfs(icam).nLenslet;
 
-  if( tau0>0 )
-    windspeed = 0.791*size_ssp/tau0;// factor 0.791 has been calibrated by yao simulation
-  else
-    windspeed=0.0;
+  vx = 0.791*size_ssp/tau0_x;// factor 0.791 has been calibrated by yao simulation
+  vy = 0.791*size_ssp/tau0_y;
+
+  dir = atan(vy/vx)*180/pi;
   
-  return windspeed;
+  return abs(vx,vy);
 }
 
 

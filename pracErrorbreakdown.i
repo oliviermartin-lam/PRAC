@@ -105,18 +105,18 @@ if(rtc.obsMode == "MOAO"){
   //................. SR .................//
   
   //Marechal approximation
-  budget.SRmar = 100*(exp(-ir_total*lamb2));
+  budget.SRmar = exp(-ir_total*lamb2);
 
   //Parenti approximation
   SRttr = exp(-(sum(sigPHI(3:)) + sigPERP)*lamb2);
   sigTT = (sum(sigPHI(1:2)))*lamb2;
   //expression of Parenti 1994
-  budget.SRpar = 100*(SRttr/(1. + sigTT) + (1. - SRttr)/sizeHalo);
+  budget.SRpar = SRttr/(1. + sigTT) + (1. - SRttr)/sizeHalo;
 
   //Born approximation
   SRperp = exp(-sigPERP*lamb2);
   sigPara = sum(sigPHI)*lamb2;
-  budget.SRborn = 100*(SRperp/(1. + sigPara) + (1. - SRperp)/sizeHalo);
+  budget.SRborn = SRperp/(1. + sigPara) + (1. - SRperp)/sizeHalo;
 
 }
 
