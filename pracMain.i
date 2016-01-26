@@ -138,15 +138,15 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   SR_res   = max(PSF_res);
   
   budget.ncpa  = sr2var(SR_best,cam.lambda);
-  budget.SRsky = 100*SR_sky;
+  budget.SRsky = SR_sky;
   
   PRAC_errorbreakdown,verb=verb;
 
-  psf.SR_tomo  = 100*SR_tomo;
-  psf.SR_bw    = 100*SR_bw;
-  psf.SR_fit   = 100*SR_fit;
-  psf.SR_stats = 100*SR_stats;
-  psf.SR_cpa   = 100*SR_cpa;
+  psf.SR_tomo  = SR_tomo;
+  psf.SR_bw    = SR_bw;
+  psf.SR_fit   = SR_fit;
+  psf.SR_stats = SR_stats;
+  psf.SR_cpa   = SR_cpa;
   
   /////////////////////
   // .... storaging otf in structs

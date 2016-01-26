@@ -501,23 +501,26 @@ func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
 
 
   
-func PRAC_all(void)
+func pracAll(void)
 /* DOCUMENT PRAC_all
 
  */
 {
   
-  Dir  = listFile("/home/olivier/CANARY/Data/PHASE_B/");
-  Dir  = Dir(sort(Dir));
-  Dir  = Dir(12:-10);
-  ndir = numberof(Dir);
+  
 
   tmpDir          = "/home/olivier/CANARY/Data/PHASE_B/tmp/stycomartin/";
   logFile         = tmpDir + "log.txt"; 
   dialogFile      = tmpDir + "dialogFile.txt"; 
   dataDir 	= "/home/olivier/CANARY/Data/PHASE_B/";
 
-  goodDir = "results/";
+  Dir  = listFile("/home/olivier/CANARY/Data/PHASE_B/");
+  Dir  = Dir(sort(Dir));
+  Dir  = Dir(17:21);
+  Dir  = "2012_10_04_onsky";
+  ndir = numberof(Dir);
+  
+  goodDir = "results/pracResults/";
   if(!direxist(goodDir)) system,"mkdir " + goodDir;
   
   for(i=1;i<=ndir;i++){
@@ -530,13 +533,13 @@ func PRAC_all(void)
         w = where(strfind("script",pathstl)(0,) != -1);
         pathstl = pathstl(w);
         ntl = numberof(pathstl);
-        PRAC_res = array(pointer,32);
-        nl = 5;
+        //PRAC_res = array(pointer,32);
+        //nl = 5;
         for(j=1;j<=ntl;j++){
           //extracts the date
           timetl = extractTime(pathstl(j));
-          p = PRAC_main(timetl,Dir=procDir,verb=0,disp=0,mode="intersample");
-          if(is_pointer(p)){
+          p = pracMain(timetl,Dir=procDir,verb=0,disp=0);
+          /*if(is_pointer(p)){
             //Data identity
             for(k1=1;k1<=4;k1++){PRAC_res(k1) = & grow(*PRAC_res(k1),(strchar( (*p(1))(k1) )));}
             //global parameters
@@ -551,10 +554,10 @@ func PRAC_all(void)
             for(k5=22;k5<=31;k5++){PRAC_res(k5) = & grow(*PRAC_res(k5),(*p(6))(k5-21));}
             //Ensquared Energy
             PRAC_res(32) = &grow(*PRAC_res(32),*p(7));
-          }
+            }*/
           write,format="%s","Job done: " + var2str(100.*j/ntl) + "%\r";
         }
-      writefits, goodDir + "PRACres_" + Dir(i) +".fits",PRAC_res;
+        //writefits, goodDir + "PRACres_" + Dir(i) +".fits",PRAC_res;
     }
   }
 }

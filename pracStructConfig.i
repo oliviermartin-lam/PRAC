@@ -17,12 +17,13 @@ func define_structs(timedata,simu=,verb=)
     //Structures instantiation
     include, "pracStructInit.i",1;
     ast    = asterism_struct();
+    cam    = cam_struct();
     tel    = telescope_struct();
     atm    = atm_struct();
     rtc    = rtc_struct();
     wfs    = array(wfs_struct,nwfs);
     dm     = dm_struct();
-    cam    = cam_struct();
+    
     sys    = sys_struct();
     learn  = learn_struct();
     learn_fit  = learnfit_struct();
@@ -173,7 +174,7 @@ func defineTel(pathdata,verb=)
 {
   extern tel;
   tel.diam   = str2flt(readFitsKey(pathdata,"TELDIAM"));
-  tel.obs    = str2flt(readFitsKey(pathdata,"TELOBS"));
+  tel.obs    = min(0.285,str2flt(readFitsKey(pathdata,"TELOBS")));
   airm       = readFitsKey(pathdata,"WHTAIRM");
   if(airm != "WHTAIRM not found"){
     tel.airmass   = str2flt(airm);

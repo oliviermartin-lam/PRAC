@@ -198,6 +198,7 @@ func computeDipl(nLenslet, D, h, x, y, Hlgs, xshift,yshift,magnification,theta,o
       dipl(,1,) += h*x;
       dipl(,2,) += h*y;
   }
+
   return dipl;
 }
 

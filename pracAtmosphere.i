@@ -165,7 +165,7 @@ func getWindspeedProfile(&dv_h,&ddir_h,verb=)
   Call += *covMatrix.noise;
 
   //determines number of modes to be filtered for the inversion
-  condCaa = 100.;
+  condCaa = 30.;
   mode = computeModesToBeFiltered(Call,rtc.its,condCaa = condCaa);
   //inversion of the full matrix
   Call_1 = inverse_mat(Call, mode);
