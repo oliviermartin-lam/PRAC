@@ -51,7 +51,7 @@ struct lmfit_result {
 }
 
 func lmfit(f, x, &a, y, w, fit=, correl=, stdev=, gain=, tol=, deriv=, itmax=,
-	lambda=, eps=, monte_carlo=)
+           lambda=, eps=, monte_carlo=,verb=)
 /* DOCUMENT lmfit -- Non-linear least-squares fit by Levenberg-Marquardt
                      method.
 

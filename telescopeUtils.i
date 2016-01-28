@@ -116,7 +116,7 @@ func residualOTF(method,verb=,disp=)
     
     // .... Adding fitting + ncpa
     OTF_res = fft(PSF_res).re;
-    OTF_res *= roll(*otf.fit)*computeFakeOTFncpa(budget.SRncpa);
+    OTF_res *= roll(*otf.fit);
 
     //grabbing the PSF
     PSF_res = roll(fft(OTF_res).re);
@@ -138,16 +138,65 @@ func residualOTF(method,verb=,disp=)
     Cee  = residue(,+) * residue(,+)/dimsof(residue)(0);
     // noise matrix
     Cnn  = 0*Cee;
-    takesDiag(Cnn) = varNoise(residue);
+    takesDiag(Cnn) = getNoiseVar(residue);
     // aliasing matrix
     Crr = *covMatrix.aliasing;
     Crr = computeCovSlopesError(Crr,*rtc.R);
     //true residual covariance matrix estimation
-    Cres = Cee - Cnn + Crr;
-    
-    Dphi_res = 2*(Cres - max(Cres)); 
+    Cres = Cee - Cnn - Crr;
+
+    // computation of influence function and defining the pupil
+    N = tel.nPixels;
+    x = (indgen(N)-(N/2+1)) *tel.pixSize / (tel.diam/2.);   // x is expressed in pupil radius
+    x = x(,-:1:N);
+    y = transpose(x);
+    P = circularPupFunction(x,y,tel.obs); //pupil function expressed in pupil radius
+
+    //autocorrelation of the pupil expressed in pupil radius^-1
+    fftpup = fft(P);
+    conjpupfft = conjugate(fftpup);
+    OTF_tel = fft(fftpup*conjpupfft).re;
+    //defining the inverse
+    den = 0*OTF_tel;
+    msk = OTF_tel/max(OTF_tel) > 1e-5;
+    den(where(msk)) = 1./OTF_tel(where(msk));
+
+  
+    //computes the covariance matrix of voltages in volts^2
+    Cvv = propagateError2Dm(Cres, *rtc.mc );
+
+    //Diagonalizing the Cvv matrix
+    l = SVdec(Cvv,Bt,B); // in volts^2
+    fi = readfits("fitsFiles/dm_modes.fits",err=1);
+    M = fi(,,+)*B(,+); 
+  
+    //loop on actuators
+    tmp = Mi = 0.*P;
+    for(i=1;i<=dm.nValidActu;i++){
+      Mi =  M(,,i); //must be in volt^2 * meter^2
+      //Vii computation  in m^-2.volts^-2
+      Vii = (fft(Mi*Mi)*conjpupfft).re - abs(fft(Mi))^2;
+      //summing modes into dm basis
+      tmp += l(i) * Vii; //must be in meters^-2
+    }
+
+    Dphi_res = den*fft(tmp).re * (2*pi/cam.lambda)^2. ; 
     OTF_res  = exp(-0.5*Dphi_res);
 
+    //Final OTF
+    OTF_res *= roll(*otf.fit) * roll(*otf.tel);
+    
+    //grabbing the PSF
+    PSF_res = roll(fft(OTF_res).re);
+    PSF_res /= sum(PSF_res);
+    PSF_res /= tel.airyPeak;
+    
+    SR_res = arrondi(100*max(PSF_res),1);
+
+    //cropping the reconstructed PSF
+    nm = (tel.nPixels - cam.nPixelsCropped)/2+1;
+    np = (tel.nPixels +  cam.nPixelsCropped)/2;
+    PSF_res =  PSF_res(nm:np,nm:np);
   }
 
 
@@ -167,18 +216,16 @@ func residualOTF(method,verb=,disp=)
   ///////////////////////////////
 
   if(disp){
-    window,6;clr;
+    window,8;clr;
     N = cam.nPixelsCropped;
     pli,PSF_res,-N*tel.pixSize,-N*tel.pixSize,N*tel.pixSize,N*tel.pixSize;
-    pltitle,"Direct reconstructed PSF with SR = "+var2str(SR_res)+"%";
+    if(method == "instantaneous")
+      pltitle,"Instanteneous reconstructed PSF with SR = "+var2str(SR_res)+"%";
+     else if(method == "Veran")
+       pltitle,"Reconstructed PSF using V_ii_ with SR = "+var2str(SR_res)+"%";
     xytitles,"Arcsec","Arcsec";
   
-    window,7;clr;
-    pli,*psf.sky,-N*tel.pixSize,-N*tel.pixSize,N*tel.pixSize,N*tel.pixSize;
-    pltitle,"Sky PSF with SR = "+var2str(arrondi(100*max(*psf.sky),1))+"%";
-    xytitles,"Arcsec","Arcsec";
-  
-    winkill,8;window,8,style="aanda.gs",dpi=90;clr;
+    winkill,9;window,9,style="aanda.gs",dpi=90;clr;
     plg, *psf.EE_sky, boxsize;
     plg, *psf.EE_res,boxsize,color=[100,100,100];
     plg, EE, boxsize,color=[128,128,128];
@@ -187,9 +234,12 @@ func residualOTF(method,verb=,disp=)
     plg, [0,100],[fcut,fcut],type=2,marks=0;
     plg, [0,100],[1,1]*1.22*radian2arcsec*cam.lambda/tel.diam,type=2,marks=0;
     xytitles,"Angular separation from center (arcsec)","Ensquared Energy (%)";
-    plt,"A: On-sky PSF",1.5,40,tosys=1;
-    plt,"B: OTF-based reconstructed PSF",1.5,30,tosys=1;
-    plt,"C: Telemetry-based reconstructed PSF",1.5,20,tosys=1;
+    plt,"A: On-sky PSF",1.,40,tosys=1;
+    plt,"B: Analytic-based reconstructed PSF",1.,30,tosys=1;
+    if(method == "instantaneous")
+      plt,"C: Telemetry-based instantaneous nreconstructed PSF",1.,20,tosys=1;
+    else if(method == "Veran")
+      plt,"C: Telemetry-based reconstructed PSF using V_ii_",1.,20,tosys=1;
     plt,"DM cut frequency",fcut*1.05,50,tosys=1;
     plt,"1.22 !l/D",1.22*radian2arcsec*cam.lambda/tel.diam*1.05,10,tosys=1;
     range,0,105;
@@ -273,9 +323,6 @@ func computeOTFstatic(&PSF_stats)
   x     = (indgen(N) -N/2)(,-:1:N);
   x    *= tel.pixSize/(tel.diam/2.);
   y     = transpose(x);
-  tmp   = polarFromCartesian(x,y);
-  rho   = tmp(,,1);
-  theta = tmp(,,2);
 
   //computes static aberrations in arcsec
   stats  = (*rtc.slopes_res)(slrange(rtc.its),avg);
@@ -287,6 +334,9 @@ func computeOTFstatic(&PSF_stats)
   //Generating and saving zernike modes
   Zi = readfits("fitsFiles/zernikeModes.fits",err=1);
   if(is_void(Zi)){
+    tmp   = polarFromCartesian(x,y);
+    rho   = tmp(,,1);
+    theta = tmp(,,2);
     Zi = array(0.0,N,N,35);
     for(i=1;i<=35;i++){
       Zi(,,i) = computeZernikePolynomials(rho,theta,i);
@@ -313,6 +363,104 @@ func computeOTFstatic(&PSF_stats)
   PSF_stats = fft(OTF_stats).re;
   
   return OTF_stats;
+}
+
+func ncpaPhaseDiversity(procDir,nm,nlow,&psfNcpa,&a,verb=,disp=)
+/* DOCUMENT psf2 = ncpaPhaseDiversity("2013_09_17_onsky/",20,36,psf,a)
+
+ */
+{
+  N = cam.nPixelsCropped;
+  OTF_ncpa = getOTFncpa(N,procDir,SR_bench,psfNcpa,disp=disp);
+
+
+  require,"/home/omartin/CANARY/Algorithms/OPRA/opra.i";
+
+  modes     = "zernike"; // 4.92e-3
+  lambda    = cam.lambda;   // [m]
+  pixsize   = cam.pixSize;     // [arcsec]
+  nmodesmax = 100;
+
+  opp = opra(psfNcpa(,,-:1:1),[0],lambda,pixsize,tel.diam,nmodes=nmodesmax,use_mode=modes, \
+             noise=0.0,cobs=tel.obs,progressive=0,first_nofit_astig=1,fix_kern=0,fix_pix=1, \
+  niter=10,fix_defoc=1,dpi=140,gui=0,nm=1);
+
+/*
+  //grabbing the PSF
+  N = cam.nPixelsCropped;
+  OTF_ncpa = getOTFncpa(N,procDir,SR_bench,psfNcpa,disp=disp);
+
+  // .... GEOMETRY 
+
+  //Defining the pupil
+  x       = (indgen(N) -N/2)(,-:1:N);
+  pixSize = tel.pixSize*(tel.nPixels/N);
+  x       *= pixSize/(tel.diam/2.);
+  y        = transpose(x);
+  P        = circularPupFunction(x,y,tel.obs);
+
+  // defining the polar corrdinates
+  tmp   = polarFromCartesian(x,y);
+  rho   = tmp(,,1);
+  theta = tmp(,,2);
+
+  
+  //phase diversity
+
+  input    = array(pointer,2);
+  input(1) = &[nlow,N,pixSize];
+  input(2) = &[P,rho,theta];
+  a    = array(.1,nm);
+
+  //Levenberg-Marquardt Iterative fitting
+  res  = lmfit(psfModel,input,a,psfNcpa,eps=1e-3,verb=verb);
+
+  return psfModel(input,a);
+*/
+}
+
+func psfModel(input,a)
+{
+
+  nm      = numberof(a);
+
+  if(is_pointer(input)){
+    nlow    = int((*input(1))(1));
+    N       = int((*input(1))(2));
+    pixSize = (*input(1))(3);
+    P       = (*input(2))(,,1);
+    rho     = (*input(2))(,,2);
+    theta   = (*input(2))(,,3);
+  }else{
+    N = cam.nPixelsCropped;
+    nlow = 1;
+    //Defining the pupil
+    x       = (indgen(N) -N/2)(,-:1:N);
+    pixSize = tel.pixSize*(tel.nPixels/N);
+    x       *= pixSize/(tel.diam/2.);
+    y        = transpose(x);
+    P        = circularPupFunction(x,y,tel.obs);
+
+    // defining the polar corrdinates
+    tmp   = polarFromCartesian(x,y);
+    rho   = tmp(,,1);
+    theta = tmp(,,2);
+  }
+  
+  //deriving the Zernike modes
+  phi = array(0.,N,N);
+  for(i=1;i<=nm;i++){
+    phi += a(i) * computeZernikePolynomials(rho,theta,i+nlow) ;
+  }
+
+  //computing the psf
+  psf  = abs(fft(roll(P*exp(1i*phi))))^2;
+
+  //normalization
+  k = 0.990707*(tel.diam^4 * (1. - tel.obs^2)^2 *pi*pi/16.)/pixSize^4;
+  psf /= k;
+
+  return roll(psf);
 }
 
 func computeFakeOTFncpa(SR_ncpa)

@@ -70,6 +70,7 @@ struct rtc_struct{
   pointer  ptrListLgs;
 
   pointer  R;
+  pointer  skyProfile;
   pointer  mi;
   pointer  mc;
   

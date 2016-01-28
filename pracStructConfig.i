@@ -336,6 +336,13 @@ func defineRtc(timedata,verb=)
     if(verb){
       write,format="Calibration time of the reconstructor : %s\n",strpart(suffmt,12:);
     }
+    rtc.recType = strcase(1,readFitsKey(pathdata,"RECTYPE"));
+    if(rtc.recType != "GLAO"){
+      //get the sky cnh profile
+      suffcnh = readFitsKey(pathdata,"CN2H");
+      ptrcnh  = restorefits("tomoparam",suffcnh);
+      rtc.skyProfile = &[abs(*ptrcnh(2)),*ptrcnh(3)];
+    }
   }
   rtc.recType = strcase(1,readFitsKey(pathdata,"RECTYPE"));
   rtc.aoMode = giveTomoMode(wfs.type,rtc.obsMode,rtc.recType);
@@ -406,6 +413,7 @@ func defineAtm(pathdata,&varNoise,verb=)
   sys.tracking = *ptr_prof(4);
 
   // Re doing windspeed profile estimation
+  /*
   learn.nl = atm.nLayers;
   learn.cnh = atm.cnh;
   learn.altitude = atm.altitude;
@@ -417,7 +425,7 @@ func defineAtm(pathdata,&varNoise,verb=)
   getWindspeedProfile,dvh,ddirh,verb=verb;
   ptr_prof(5)  = &atm.vh;
   writefits, goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(nl)+".fits",ptr_prof;
-  
+  */
 }
 
 

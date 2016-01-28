@@ -2,6 +2,147 @@ include, "pracMain.i";
 
 
 
+func pracAll(void)
+/* DOCUMENT pracAll
+
+ */
+{
+  
+  tmpDir          = "/home/omartin/CANARY/Data/PHASE_B/tmp/stycomartin/";
+  logFile         = tmpDir + "log.txt"; 
+  dialogFile      = tmpDir + "dialogFile.txt"; 
+  dataDir 	= "/home/omartin/CANARY/Data/PHASE_B/";
+
+  Dir  = listFile("/home/omartin/CANARY/Data/PHASE_B/");
+  Dir  = Dir(sort(Dir));
+  Dir  = Dir(17:21);
+  Dir  = "2012_10_04_onsky";
+  ndir = numberof(Dir);
+  
+  goodDir = "results/pracResults/";
+  if(!direxist(goodDir)) system,"mkdir " + goodDir;
+  
+  for(i=1;i<=ndir;i++){
+    procDir = Dir(i);
+    dataDirRoot = dataDir + procDir;
+    //takes all slopestl files
+    pathstl = listVersion(dataDirRoot,"fits","slopestl");
+    if(is_array(pathstl)){
+        //keeps only the script files
+        w = where(strfind("script",pathstl)(0,) != -1);
+        pathstl = pathstl(w);
+        ntl = numberof(pathstl);
+        //PRAC_res = array(pointer,32);
+        //nl = 5;
+        for(j=1;j<=ntl;j++){
+          //extracts the date
+          timetl = extractTime(pathstl(j));
+          p = pracMain(timetl,Dir=procDir,verb=0,disp=0);
+          write,format="%s","Job done: " + var2str(100.*j/ntl) + "%\r";
+        }
+    }
+  }
+}
+
+
+
+func statisticsOnSR(aomode,all=)
+/* DOCUMENT statisticsOnSR,"",all=1
+ */
+{
+
+  tmpDir     = "/home/omartin/CANARY/Data/PHASE_B/tmp/stycomartin/";
+  logFile    = tmpDir + "log.txt"; 
+  dialogFile = tmpDir + "dialogFile.txt"; 
+  dataDir    = "/home/omartin/CANARY/Data/PHASE_B/";
+  list       = listFile("results/pracResults");
+  nfile      = numberof(list);
+
+  SR_sky = SR_res = [];
+  for(i=1;i<=nfile;i++){
+    //loading results
+    p = readfits("results/pracResults/" + list(i));
+    //grabbing aomode
+    mode = (strchar(*p(1)))(2);
+
+    if(mode == aomode || all == 1){
+      //grabbing the Strehl ratios
+      SR_sky = grow(SR_sky,(*p(11))(1));
+      SR_res = grow(SR_res,(*p(11))(2)) ;
+      write,format="Files grabbed :%.3g%s\r",100.*i/nfile,"%";
+    }
+  }
+
+  m = max(max(SR_res),max(SR_sky));
+  winkill,0;window,0,dpi=90,style="aanda.gs";
+  plmk, SR_res,SR_sky,marker = 4,msize=.2,width = 10;
+  plg, [0,m],[0,m],marks=0,type=2;
+  xytitles,"Sky Strehl ratio in H","Reconstructed Strehl ratio";
+  if(is_string(aomode)){
+    pltitle,"SR reconstruction performance in " + aomode;
+    pdf,"results/srReconstructionIn" + aomode;
+  }else{
+    pltitle,"SR reconstruction performance for all AO modes";
+    pdf,"results/srReconstructionInAllAoModes";
+  }
+}
+
+func statisticsOnEE(aomode,all=)
+/* DOCUMENT statisticsOnEE,[],all=1
+ */
+{
+
+  tmpDir     = "/home/omartin/CANARY/Data/PHASE_B/tmp/stycomartin/";
+  logFile    = tmpDir + "log.txt"; 
+  dialogFile = tmpDir + "dialogFile.txt"; 
+  dataDir    = "/home/omartin/CANARY/Data/PHASE_B/";
+  list       = listFile("results/pracResults");
+  nfile      = numberof(list);
+
+  EE_sky = EE_res = [];
+  nPixelsCropped = 128;
+  nPixels = 512;
+  lambda = 1.677e-6;
+  pixSize = 0.0297949;
+  foV = nPixels * pixSize;
+  D = 4.2;
+  
+  dl =  indgen(nPixelsCropped/2) * foV/nPixels;
+  n = where(dl>= 10*radian2arcsec*lambda/D)(1);
+  for(i=1;i<=nfile;i++){
+    //loading results
+    p = readfits("results/pracResults/" + list(i));
+    //grabbing aomode
+    mode = (strchar(*p(1)))(2);
+
+    if(mode == aomode || all == 1){
+      //grabbing the Strehl ratios
+      EE_sky = grow(EE_sky,(*p(7))(n,1));
+      EE_res = grow(EE_res,(*p(7))(n,2)) ;
+      write,format="Files grabbed :%.3g%s\r",100.*i/nfile,"%";
+    }
+  }
+
+  mm = max(max(EE_res),max(EE_sky));
+  mn = max(min(min(EE_res),min(EE_sky)),30);
+  winkill,0;window,0,dpi=90,style="aanda.gs";
+  plmk, EE_res,EE_sky,marker = 4,msize=.2,width = 10;
+  plg, [mn,mm],[mn,mm],marks=0,type=2;
+  limits,30,mm;range,30,mm;
+  xytitles,"Sky Ensquared energy (%) at 10!l/D in H","Rec. Ensquared Energy (%) at 10!l/D";
+  if(is_string(aomode)){
+    pltitle,"EE reconstruction performance in " + aomode;
+    pdf,"results/eeReconstructionIn" + aomode;
+  }else{
+    pltitle,"EE reconstruction performance for all AO modes";
+    pdf,"results/eeReconstructionInAllAoModes";
+  }
+}
+
+
+
+
+
 
 func plotProfiles(void)
 /* DOCUMENT plotProfiles;
@@ -501,66 +642,7 @@ func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
 
 
   
-func pracAll(void)
-/* DOCUMENT PRAC_all
 
- */
-{
-  
-  
-
-  tmpDir          = "/home/olivier/CANARY/Data/PHASE_B/tmp/stycomartin/";
-  logFile         = tmpDir + "log.txt"; 
-  dialogFile      = tmpDir + "dialogFile.txt"; 
-  dataDir 	= "/home/olivier/CANARY/Data/PHASE_B/";
-
-  Dir  = listFile("/home/olivier/CANARY/Data/PHASE_B/");
-  Dir  = Dir(sort(Dir));
-  Dir  = Dir(17:21);
-  Dir  = "2012_10_04_onsky";
-  ndir = numberof(Dir);
-  
-  goodDir = "results/pracResults/";
-  if(!direxist(goodDir)) system,"mkdir " + goodDir;
-  
-  for(i=1;i<=ndir;i++){
-    procDir = Dir(i);
-    dataDirRoot = dataDir + procDir;
-    //takes all slopestl files
-    pathstl = listVersion(dataDirRoot,"fits","slopestl");
-    if(is_array(pathstl)){
-        //keeps only the script files
-        w = where(strfind("script",pathstl)(0,) != -1);
-        pathstl = pathstl(w);
-        ntl = numberof(pathstl);
-        //PRAC_res = array(pointer,32);
-        //nl = 5;
-        for(j=1;j<=ntl;j++){
-          //extracts the date
-          timetl = extractTime(pathstl(j));
-          p = pracMain(timetl,Dir=procDir,verb=0,disp=0);
-          /*if(is_pointer(p)){
-            //Data identity
-            for(k1=1;k1<=4;k1++){PRAC_res(k1) = & grow(*PRAC_res(k1),(strchar( (*p(1))(k1) )));}
-            //global parameters
-            for(k2=5;k2<=8;k2++){PRAC_res(k2) = & grow(*PRAC_res(k2),(*p(2))(k2-4));}
-            //turbulence profile
-            for(k3=9;k3<=11;k3++){PRAC_res(k3) = & grow(*PRAC_res(k3),(*p(3))((k3-9)*nl+1:(k3-8)*nl));}
-            //tracking
-            for(k8=12;k8<=14;k8++){PRAC_res(k8) = & grow(*PRAC_res(k8),(*p(4))(k8-11));}
-            //error budget
-            for(k4=15;k4<=21;k4++){PRAC_res(k4) = & grow(*PRAC_res(k4),(*p(5))(k4-14));}
-            //Strehl ratios
-            for(k5=22;k5<=31;k5++){PRAC_res(k5) = & grow(*PRAC_res(k5),(*p(6))(k5-21));}
-            //Ensquared Energy
-            PRAC_res(32) = &grow(*PRAC_res(32),*p(7));
-            }*/
-          write,format="%s","Job done: " + var2str(100.*j/ntl) + "%\r";
-        }
-        //writefits, goodDir + "PRACres_" + Dir(i) +".fits",PRAC_res;
-    }
-  }
-}
 
 /*
  ____  ____  _____     ____  

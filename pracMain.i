@@ -50,22 +50,26 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   OTF_tel = OTF_telescope(tel.diam,tel.obs,tel.nPixels,tel.pixSize);
 
   /////////////////////
+  // .... OTF from static aberration except NCPA
+  //////////////////////////////////////////////////////////
+  
+  OTF_telstats  =  computeOTFstatic(PSF_stats);//telescope included
+  
+  /////////////////////
   // .... OTF from response delay time of the system
   //////////////////////////////////////////////////////////
   
   OTF_bw = computeOTFbandwidth(geometry,rtc.obsMode,verb=verb);
 
   /////////////////////
-  // .... OTF from fitting error
+  // .... OTF from fitting error + ncpa
   //////////////////////////////////////////////////////////
+  OTF_ncpa = getOTFncpa(cam.nPixelsCropped,procDir,SR_ncpa,PSF_ncpa,disp=disp);
+  budget.SRncpa = SR_ncpa;
+  psf.ncpa     = &PSF_ncpa;
   
-  OTF_fit = computeOTFfitting(geometry,verb=verb);
+  OTF_fit = computeOTFfitting(geometry,SR_ncpa,verb=verb);//ncpa included
 
-  /////////////////////
-  // .... OTF from static aberration except NCPA
-  //////////////////////////////////////////////////////////
-  
-  OTF_telstats  =  computeOTFstatic(PSF_stats);//telescope and ncpa included
 
   /////////////////////
   // .... OTF from tomographic residue, mode = "Uij", "Vii" or "intersample"
@@ -77,20 +81,7 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   // .... OTF at the TS location
   //////////////////////////////////////////////////////////
   
-  OTF_ts = OTF_fit * OTF_bw * OTF_tomo * OTF_telstats ; //telescope included into OTF_stats
-
-  /////////////////////
-  // .... OTF from NCPA
-  //////////////////////////////////////////////////////////
-  oncpa = getOTFncpa(cam.nPixelsCropped,procDir,SR_best,PSF_ncpa,disp=disp);
-  budget.SRncpa = SR_best;
-  psf.ncpa     = &PSF_ncpa;
-  
-  //computing a fake ncpa without telescope contribution
-  OTF_ncpa = computeFakeOTFncpa(budget.SRncpa);
-
-  // multiplying by NCPA OTF
-  OTF_res  = OTF_ts * OTF_ncpa;
+  OTF_res = OTF_fit * OTF_bw * OTF_tomo * OTF_telstats ; //telescope included into OTF_stats
 
 
   /////////////////////
@@ -133,11 +124,10 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   SR_bw    = sum(OTF_bw * OTF_tel);
   SR_fit   = sum(OTF_fit * OTF_tel);
   SR_stats = sum(OTF_telstats);
-  SR_cpa   = sum(OTF_ts);
   SR_sky   = max(PSF_sky);
   SR_res   = max(PSF_res);
   
-  budget.ncpa  = sr2var(SR_best,cam.lambda);
+  budget.ncpa  = sr2var(SR_ncpa,cam.lambda);
   budget.SRsky = SR_sky;
   
   PRAC_errorbreakdown,verb=verb;
@@ -146,7 +136,6 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   psf.SR_bw    = SR_bw;
   psf.SR_fit   = SR_fit;
   psf.SR_stats = SR_stats;
-  psf.SR_cpa   = SR_cpa;
   
   /////////////////////
   // .... storaging otf in structs
@@ -158,8 +147,6 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   otf.tomo   = &roll(OTF_tomo);
   otf.ncpa   = &roll(OTF_ncpa);
   otf.static = &roll(OTF_telstats);
-  otf.ts     = &roll(OTF_ts);
-  otf.cpa    = &roll(OTF_cpa);
   otf.ts_cropped = &roll(OTF_ts_cropped);
   
   otel = roll(OTF_telescope(tel.diam,tel.obs,cam.nPixelsCropped,tel.pixSize*tel.nPixels/cam.nPixelsCropped));
@@ -194,7 +181,7 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   if(disp){
     l = cam.nPixelsCropped * cam.pixSize;
     window,0; clr;logxy,0,0; pli, *psf.ncpa,-l/2,-l/2,l/2,l/2,cmin=0;
-    pltitle,"Best bench PSF with SR = " + var2str(arrondi(100*SR_best,1))+"%";
+    pltitle,"Best bench PSF with SR = " + var2str(arrondi(100*SR_ncpa,1))+"%";
     xytitles,"Arcsec","Arcsec";
   
     window,1; clr;pli, *psf.res,-l/2,-l/2,l/2,l/2,cmin=0,cmax = SR_sky;
@@ -251,6 +238,16 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
     plt,"A: Sky OTF",1,0.8,tosys=1;
     plt,"B: reconstructed OTF",1,0.6,tosys=1;
     range,-.1,1.1;
+
+    if(strpart(rtc.aoMode,1:4) == "MOAO"){
+      winkill,7;window,7,style="aanda.gs",dpi=90;clr;
+      displayLayers,atm.cnh,atm.altitude,col=[char(242)],percent=1,thick=.4;
+      displayLayers,-(*rtc.skyProfile)(,1),(*rtc.skyProfile)(,2),col=[char(241)],percent=1;
+      limits,-100,100;
+      range,-1,20;
+      plt,"Calibration on-sky profile",-80,15,tosys=1;
+      plt,"Post retrieved profile",30,15,tosys=1,color=[128,128,128];
+    }
   }
 
   tf = tac(10);
@@ -265,8 +262,7 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
     write,format="SR bw               = %.3g%s\n", 100*SR_bw,"%";
     write,format="SR tomo+alias+noise = %.3g%s\n", 100*SR_tomo,"%";
     write,format="SR static           = %.3g%s\n", 100*SR_stats,"%";
-    write,format="SR cpa              = %.3g%s\n", 100*SR_cpa,"%";
-    write,format="SR ncpa             = %.3g%s\n", 100*SR_best,"%";
+    write,format="SR ncpa             = %.3g%s\n", 100*SR_ncpa,"%";
     write,format="Diff of psf         = %.3g%s\n", 100*diffPSF,"%";
     write,format="Residual error      = %.4g nm rms\n", budget.res;
     write,format="Tomographic error   = %.4g nm rms\n", budget.tomo;
@@ -318,7 +314,7 @@ func concatenatePracResults(void)
   //Ensquared Energy
   pracResults(7) = &[*psf.EE_sky,*psf.EE_res];
   //OTFs
-  pracResults(8) = &[*otf.fit,*otf.bw,*otf.tomo,*otf.ncpa,*otf.static,*otf.ts];
+  pracResults(8) = &[*otf.fit,*otf.bw,*otf.tomo,*otf.static];
   
   /////////////////////
   // ..... PERFORMANCE
@@ -331,7 +327,7 @@ func concatenatePracResults(void)
   //Strehl ratios
   pracResults(11) = &(100*[psf.SR_sky,psf.SR_res,budget.SRmar,budget.SRpar,budget.SRborn,psf.SR_tomo,psf.SR_fit,psf.SR_bw,psf.SR_stats,psf.SR_cpa,budget.SRncpa,diffPSF]);
 
-  writefits,"results/pracResults_" + strpart(procDir,1:10) + "_" + timedata + ".fits",pracResults;
+  writefits,"results/pracResults/pracResults_" + strpart(procDir,1:10) + "_" + timedata + ".fits",pracResults;
   
   return pracResults;
 }

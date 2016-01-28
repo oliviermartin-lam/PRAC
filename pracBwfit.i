@@ -41,12 +41,14 @@ func computePSDbandwidth(k,Fe,tret,gain,BP,northo,mode=,verb=)
   PSD_bw   = 0*k;
 
   //r0 at cam.lambda
-  r0tot = (sum(atm.cnh)^(-3/5.))*(cam.lambda/atm.lambda)^1.2;
+  r0tot = atm.r0*(cam.lambda/atm.lambda)^1.2;
   //r0^(-5/3.) at cam.lambda
   cnh   = atm.cnh * r0tot^(-5/3.)/sum(atm.cnh);
-  l0    = atm.l0h;
+  l0h   = atm.l0h;
   vh    = atm.vh;
-
+  //rescaling the integrated value to minimize the model error
+  L0eff = (sum(atm.l0h^(-5/3.) * atm.cnh) / sum(atm.cnh))^(-3/5.);
+  l0h   = l0h *  atm.L0/L0eff;
   //adding turbulent layers
   for(l = 1;l<=atm.nLayers;l++){
     nu_l = k * vh(l)/sqrt(2);
@@ -55,18 +57,19 @@ func computePSDbandwidth(k,Fe,tret,gain,BP,northo,mode=,verb=)
     }else if(mode == "SCAO"){
       hcor = hcorScao(nu_l, Fe, tret, gain, BP);
     }
-    PSD_bw +=  abs(hcor) * 0.023 * cnh(l) * (k^2 + 1./l0(l)^2.)^(-11/6.);
+    PSD_bw +=  abs(hcor) * 0.023 * cnh(l) * (k^2 + 1./l0h(l)^2.)^(-11/6.);
   }
 
  
   PSD_bw(N/2+1,N/2+1) = 0;
-  PSD_bw(northo) = 0.00;
+  if(mode == "SCAO")
+    PSD_bw(northo) = 0.00;
 
   return PSD_bw;
 }
 
 
-func computeOTFfitting(geometry,verb=)
+func computeOTFfitting(geometry,SR_ncpa,verb=)
 /* DOCUMENT
  */
 {
@@ -87,8 +90,18 @@ func computeOTFfitting(geometry,verb=)
     msk = defineDmFrequencyArea(k, kx, ky, geometry, dm.pitch );
     //defining the 0/1 square mask
     ndm    = where( msk );
+    northo = where( !msk );
+    //filling the PSD
+    tot = numberof(northo);
     PSD_fit = computeWienerSpectrum(k, tel.nPixels, r0tot, atm.L0);
     PSD_fit(ndm) = 0.0;
+
+    //adding ncpa
+    WFE_ncpa = sqrt(- (cam.lambda*1e9/2/pi)^2 * log(SR_ncpa));
+    fact = 2*pi* WFE_ncpa / tel.fourierPixSize / (cam.lambda*1e9);
+    fact = fact^2;
+    PSD_fit(northo) += fact / double(tot);
+
     PSD_fit(N/2+1,N/2+1) = 0.0;
     PSD_fit(N/2+1,N/2+1) = -sum(PSD_fit);  
     DPHI_fit = 2*abs(fft(PSD_fit)) *  (tel.fourierPixSize^2);
@@ -125,6 +138,7 @@ func computeOTFfitting(geometry,verb=)
     //computing the fitting PSD
     PSD_fit = computeWienerSpectrum(k, tel.nPixels, r0tot, atm.L0);
     PSD_fit *= roll(Hfilter);
+  
     PSD_fit(N/2+1,N/2+1) = 0.0;
     PSD_fit(N/2+1,N/2+1) = -sum(PSD_fit);  
     //computing the structure function
@@ -297,7 +311,7 @@ func hwfs(freq,Fe)
   z = exp(-p*Te);
   //defines the transfer function
   haso =  (1. - z)/(p*Te);
-  haso*=haso; //taking into account both CCD and DAC delay
+  haso*=haso; //taking into account both WFS and DAC delay
 
   return haso;
 }

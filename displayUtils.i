@@ -21,10 +21,10 @@ func displayLayers(cn2h,alt,xylabels,l0=,percent=,col=, thick=,strength_rms=)
 
   // getting profile data from tomo structure
   x = cn2h;
-  if(!l0){
-    w = where(cn2h!=0);
-    x(w) =0.103/cn2h(w)^(-3/5.);
-  }
+  // if(!l0){
+    //w = where(cn2h!=0);
+    //x(w) =0.103/cn2h(w)^(-3/5.);
+  //}
   //x = cn2h;
   if(!sum(sign(cn2h)==-1) == numberof(cn2h))
     x = abs(cn2h);
