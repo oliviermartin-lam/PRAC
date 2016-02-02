@@ -5,7 +5,9 @@ include, "pracLmfit.i";
 include, "pracLearn.i";
 include, "pracErrorbreakdown.i";
 include, "pracAtmosphere.i";
+include, "pracDirectPsfr.i";
 
+include, "canaryUtils.i";
 include, "telescopeUtils.i"; 
 include, "noiseUtils.i";
 include, "imageUtils.i";
@@ -21,8 +23,8 @@ pldefault,font="times";
 pldefault,palette="earth.gp";
 pltitle_font = "times";
 
-func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
-/*DOCUMENT p = pracMain("02h31m34s",verb=1,disp=0); p = pracMain("02h30m48s",verb=1,disp=1);p = pracMain("02h31m11s",verb=1,disp=1);
+func pracMain(timedata,psfrMethod=,averageMode=,Dir=,verb=,disp=,writeRes=)
+/*DOCUMENT p = pracMain("02h31m34s",verb=1,disp=0); p = pracMain("02h30m48s",verb=1,disp=1);p = pracMain("02h31m11s",verb=1,disp=1,psfrMethod = "analytic",averageMode = "Vii",writeRes=1);
  
  */
 {
@@ -35,7 +37,12 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   }
 
   geometry = "square";
+  if(is_void(psfrMethod))
+    psfrMethod = "analytic";
+  if(is_void(averageMode))
+    averageMode = "Vii";
 
+  
   /////////////////////
   //.... Initializing the data struct
   //////////////////////////////////////////////////////////
@@ -48,53 +55,191 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   //////////////////////////////////////////////////////////
   
   OTF_tel = OTF_telescope(tel.diam,tel.obs,tel.nPixels,tel.pixSize);
+  otf.tel    = &roll(OTF_tel);
+  otel = roll(OTF_telescope(tel.diam,tel.obs,cam.nPixelsCropped,tel.pixSize*tel.nPixels/cam.nPixelsCropped));
+  
+  /////////////////////
+  // .... OTF from fitting error + ncpa
+  //////////////////////////////////////////////////////////
+  OTF_ncpa = getOTFncpa(cam.nPixelsCropped,procDir,SR_ncpa,PSF_ncpa,disp=disp);
+  budget.SRncpa = psf.SR_ncpa = SR_ncpa;
+  psf.ncpa     = &PSF_ncpa;
+  
+  OTF_fit = computeOTFfitting(geometry,SR_ncpa,verb=verb);//ncpa included
+  otf.fit = &roll(OTF_fit);
+  psf.SR_fit   = sum((*otf.fit) * (*otf.tel));
 
   /////////////////////
   // .... OTF from static aberration except NCPA
   //////////////////////////////////////////////////////////
   
   OTF_telstats  =  computeOTFstatic(PSF_stats);//telescope included
+  otf.static    = &roll(OTF_telstats);
+
+  if(psfrMethod == "analytic"){
+    
+    /////////////////////
+    // .... OTF from response delay time of the system
+    //////////////////////////////////////////////////////////
   
-  /////////////////////
-  // .... OTF from response delay time of the system
-  //////////////////////////////////////////////////////////
+    OTF_bw = computeOTFbandwidth(geometry,rtc.obsMode,verb=verb);
+
+    /////////////////////
+    // .... OTF from tomographic residue, mode = "Uij", "Vii" or "intersample"
+    //////////////////////////////////////////////////////////////////////////////
   
-  OTF_bw = computeOTFbandwidth(geometry,rtc.obsMode,verb=verb);
+    OTF_tomo = computeOTFtomographic(averageMode,verb=verb);
 
-  /////////////////////
-  // .... OTF from fitting error + ncpa
-  //////////////////////////////////////////////////////////
-  OTF_ncpa = getOTFncpa(cam.nPixelsCropped,procDir,SR_ncpa,PSF_ncpa,disp=disp);
-  budget.SRncpa = SR_ncpa;
-  psf.ncpa     = &PSF_ncpa;
+    /////////////////////
+    // .... OTF at the TS location
+    //////////////////////////////////////////////////////////
   
-  OTF_fit = computeOTFfitting(geometry,SR_ncpa,verb=verb);//ncpa included
+    OTF_res = OTF_fit * OTF_bw * OTF_tomo * OTF_telstats ; //telescope included into OTF_stats
 
+    PSF_res  = roll( fft(OTF_res).re );
 
-  /////////////////////
-  // .... OTF from tomographic residue, mode = "Uij", "Vii" or "intersample"
-  //////////////////////////////////////////////////////////////////////////////
+    // .... Storage Strehl ratios
+    psf.SR_tomo  = sum(OTF_tomo * OTF_tel);
+    psf.SR_bw    = sum(OTF_bw * OTF_tel);
+    psf.SR_stats = sum(OTF_telstats);
+
+    // .... Storage OTFs
+    otf.bw       = &roll(OTF_bw);
+    otf.tomo     = &roll(OTF_tomo);
+    otf.ncpa     = &roll(OTF_ncpa);
+    
   
-  OTF_tomo = computeOTFtomographic(averageMode,verb=verb);
+  }else if(psfrMethod == "mmse"){
+   
+    //computes residues in arcsec
+    residue  = (*rtc.slopes_res)(slrange(rtc.its),);
+    stats    = residue(,avg);
 
-  /////////////////////
-  // .... OTF at the TS location
-  //////////////////////////////////////////////////////////
+    /////////////////////
+    // .... Determining the denoised and dealiased residual slopes
+    //////////////////////////////////////////////////////////
+
+    gpara = mmseParallelModes(residue);
+    
+    /////////////////////
+    // .... Average the Zernike modes every exposure time
+    //////////////////////////////////////////////////////////
+
+    zer2rad = pi*tel.diam/(radian2arcsec*cam.lambda); 
+    //computing the Zernike modes in radians
+    a_g  = (*sys.slopesToZernikeMatrix)(,+) * gpara(+,) * zer2rad;
+    Zi = readfits("fitsFiles/zernikeModes.fits",err=1);
+    nzer = dimsof(Zi)(0);
+    
+    //constants
+    t       = int(cam.exposureTime*rtc.Fe);
+    nframes = dimsof(gpara)(0);
+    nstep   = int(nframes/t);
+    a_res_avg = a_stat_avg = array(0.,nzer,nstep+1);
+
+    // Loop on exposure time step
+    for(i = 1;i<=nstep;i++){
+      tk = 1 + (i-1)*t:i*t;//kth exposition
+      //average on dynamic modes: the phase is averaged
+      a_res_avg(,i)  = (a_g(,tk))(,avg);
+      //static modes: the slopes are average to get the static phase
+      stat_k = (residue(,tk))(,avg);
+      a_stat_k = (*sys.slopesToZernikeMatrix)(,+) * stat_k(+);
+      a_stat_avg(,i) = a_stat_k*zer2rad;
+    }
+    
+    // .... managing the last frames
+    //static
+    stat_k = (residue(,nstep*t:))(,avg);//arcsec
+    a_stat_k = (*sys.slopesToZernikeMatrix)(,+) * stat_k(+);
+    a_stat_avg(,0) = a_stat_k*zer2rad;
+
+    //dynamic
+    a_res_avg(,0) =(a_g(,t*nstep:))(,avg);
+
+    //Adding static 
+    a_res_avg   += a_stat_avg;
+
+    /////////////////////
+    // .... Determining the PSF
+    ////////////////////////////////////////////
+
+    P  = circularPupFunction(tel.diam,tel.obs,tel.nPixels,tel.pixSize);
+
+    phi_res_k = PSF_res = 0*P;
+    
+    for(k=1;k<=nstep+1;k++){
+      phi_res_k *=0;
+      for(i=1;i<=nzer;i++){
+        phi_res_k += a_res_avg(i,k) * Zi(,,i);
+      }
+      //Electrical Field
+      E = roll(P*exp(1i*phi_res_k));
+      //PSF
+      PSF_res += abs(fft(E))^2;
+      write,format="Job done:%.3g%s\r",100.*k/(nstep+1.),"%";
+    }
+
+    /////////////////////////////////
+    // .... Adding high order modes and normalization
+    /////////////////////////////////////////////////////
+    
+    // .... Adding fitting + ncpa
+    OTF_res = fft(PSF_res).re;
+    OTF_res *= roll(*otf.fit);
+
+    //grabbing the PSF
+    PSF_res = roll(fft(OTF_res).re);
+
+  }else if(psfrMethod == "ls"){
+
+    //computes residues in arcsec
+    residue  = (*rtc.slopes_res)(slrange(rtc.its),);
+    stat     = residue(,avg);
+    residue -= stat;
+
+    /////////////////////////////////
+    // .... Computing covariance matrices
+    /////////////////////////////////////////////////////
+    
+    //TS measurements covariance matrix
+    Cee  = residue(,+) * residue(,+)/dimsof(residue)(0);
+    // noise matrix
+    Cnn  = 0*Cee;
+    takesDiag(Cnn) = getNoiseVar(residue);
+    // aliasing matrix
+    Crr = *covMatrix.aliasing;
+    if(rtc.obsMode == "MOAO")
+      Crr = computeCovSlopesError(Crr,*rtc.R);
+    else
+      Crr = Crr(slrange(rtc.its),slrange(rtc.its));
+    //true residual covariance matrix estimation
+    Cres = Cee - Cnn - Crr;
+   
+    /////////////////////////////////
+    // .... Determining the residual OTF
+    /////////////////////////////////////////////////////
+    
+    OTF_res =  computeOTFtomographic(averageMode,Dphi_res,Cee=Cres,verb=verb);
+
+    //Final OTF
+    OTF_res *= roll(*otf.fit) * roll(*otf.static);
+    //grabbing the PSF
+    PSF_res = roll(fft(OTF_res).re);
+  }
   
-  OTF_res = OTF_fit * OTF_bw * OTF_tomo * OTF_telstats ; //telescope included into OTF_stats
-
-
   /////////////////////
   // ..... Reconstructed PSF
   //////////////////////////////////////////////////////////
 
-  PSF_res  = roll( fft(OTF_res).re );
-
   //cropping
   nm = (tel.nPixels - cam.nPixelsCropped)/2+1;
   np = (tel.nPixels +  cam.nPixelsCropped)/2;
-  PSF_res =  PSF_res(nm:np,nm:np);
-  psf.res  = &PSF_res;
+  psf.res =  &PSF_res(nm:np,nm:np);
+  *psf.res /= sum(*psf.res);
+  *psf.res /= tel.airyPeak;
+  psf.SR_res = max(*psf.res);
+  
   otf.res  = &roll(fft(roll(*psf.res)).re);
   
   /////////////////////
@@ -104,52 +249,27 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   //to fixe the maximum Intensity at the middle
   OTF_sky = roll(*otf.sky);
   PSF_sky = roll(fft(OTF_sky).re);
-  
   //normalization
   PSF_sky /= sum(PSF_sky);
   PSF_sky /= tel.airyPeak;
   psf.sky  = &PSF_sky;
+  psf.SR_sky   = max(*psf.sky);
   
   // ... differential PSF
   
-  PSF_diff = abs(PSF_sky - PSF_res);
-  diffPSF = sum(PSF_diff(*)^2)/sum(PSF_sky(*)^2);
-  psf.diff  = &PSF_diff;
+  psf.diff = &(abs(*psf.sky - *psf.res));
+  psf.diffPsf = sum((*psf.diff)(*))/sum((*psf.sky)(*));
+
   
   /////////////////////
   // .... Error breakdown computation
   //////////////////////////////////////////////////////////
   
-  SR_tomo  = sum(OTF_tomo * OTF_tel);
-  SR_bw    = sum(OTF_bw * OTF_tel);
-  SR_fit   = sum(OTF_fit * OTF_tel);
-  SR_stats = sum(OTF_telstats);
-  SR_sky   = max(PSF_sky);
-  SR_res   = max(PSF_res);
-  
-  budget.ncpa  = sr2var(SR_ncpa,cam.lambda);
-  budget.SRsky = SR_sky;
-  
   PRAC_errorbreakdown,verb=verb;
 
-  psf.SR_tomo  = SR_tomo;
-  psf.SR_bw    = SR_bw;
-  psf.SR_fit   = SR_fit;
-  psf.SR_stats = SR_stats;
+  budget.ncpa  = sr2var(SR_ncpa,cam.lambda);
+  budget.SRsky =  max(PSF_sky);
   
-  /////////////////////
-  // .... storaging otf in structs
-  //////////////////////////////////////////////////////////
-  
-  otf.tel    = &roll(OTF_tel);
-  otf.fit    = &roll(OTF_fit);
-  otf.bw     = &roll(OTF_bw);
-  otf.tomo   = &roll(OTF_tomo);
-  otf.ncpa   = &roll(OTF_ncpa);
-  otf.static = &roll(OTF_telstats);
-  otf.ts_cropped = &roll(OTF_ts_cropped);
-  
-  otel = roll(OTF_telescope(tel.diam,tel.obs,cam.nPixelsCropped,tel.pixSize*tel.nPixels/cam.nPixelsCropped));
   
   /////////////////////
   // ..... Getting Ensquared Energy and FWHM on both reconstructed/sky PSF
@@ -157,20 +277,18 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   
   boxsize = EE = EE_sky = span(1,cam.nPixelsCropped-3.,cam.nPixelsCropped) * cam.pixSize;
   for(i=1; i<=cam.nPixelsCropped; i++){
-    EE(i) = getEE( 100*PSF_res/sum(PSF_res), cam.pixSize, boxsize(i));
-    EE_sky(i) = getEE(100*PSF_sky/sum(PSF_sky), cam.pixSize, boxsize(i));
+    EE(i) = getEE( 100*(*psf.res)/sum(*psf.res), cam.pixSize, boxsize(i));
+    EE_sky(i) = getEE(100*(*psf.sky)/sum(*psf.sky), cam.pixSize, boxsize(i));
   }
 
-  psfsky = PSF_sky(cam.nPixelsCropped/2+1:,cam.nPixelsCropped/2+1);
-  fwhmSky = getFWHM(psfsky/max(psfsky),tel.pixSize);
-  psfres = PSF_res(cam.nPixelsCropped/2+1:,cam.nPixelsCropped/2+1);
-  fwhmRes = getFWHM(psfres/max(psfres),tel.pixSize);
+  psfsky = (*psf.sky)(cam.nPixelsCropped/2+1:,cam.nPixelsCropped/2+1);
+  fwhmSky = getFWHM(psfsky/max(psfsky),1./tel.pixSize);
+  psfres = (*psf.res)(cam.nPixelsCropped/2+1:,cam.nPixelsCropped/2+1);
+  fwhmRes = getFWHM(psfres/max(psfres),1./tel.pixSize);
 
-    
+  
   psf.EE_res   = &EE;
   psf.EE_sky   = &EE_sky;
-  psf.SR_res   = SR_res;
-  psf.SR_sky   = SR_sky;
   psf.FWHM_sky = fwhmSky;
   psf.FWHM_res = fwhmRes;
 
@@ -179,20 +297,26 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   // .... Display and verbose
   //////////////////////////////////////////////////////////
   if(disp){
+    meth = "Full analytic";
+    if(psfrMethod == "ls")
+      meth = "TS-based LS";
+    else if(psfrMethod == "mmse")
+      meth = "TS-based MMSE";
+    
     l = cam.nPixelsCropped * cam.pixSize;
     window,0; clr;logxy,0,0; pli, *psf.ncpa,-l/2,-l/2,l/2,l/2,cmin=0;
-    pltitle,"Best bench PSF with SR = " + var2str(arrondi(100*SR_ncpa,1))+"%";
+    pltitle,"Best bench PSF with SR = " + var2str(arrondi(100*psf.SR_ncpa,1))+"%";
     xytitles,"Arcsec","Arcsec";
   
-    window,1; clr;pli, *psf.res,-l/2,-l/2,l/2,l/2,cmin=0,cmax = SR_sky;
-    pltitle,"Reconstructed PSF with SR = " + var2str(arrondi(100*SR_res,1))+"%";
+    window,1; clr;pli, *psf.res,-l/2,-l/2,l/2,l/2,cmin=0,cmax = psf.SR_sky;
+    pltitle,meth +" PSF with SR = " + var2str(arrondi(100*psf.SR_res,1))+"%";
     xytitles,"Arcsec","Arcsec";
   
-    window,2; clr;pli, *psf.sky,-l/2,-l/2,l/2,l/2,cmin=0,cmax = SR_sky;
-    pltitle,"On-sky PSF with SR = " + var2str(arrondi(100*SR_sky,1)) +"%";
+    window,2; clr;pli, *psf.sky,-l/2,-l/2,l/2,l/2,cmin=0,cmax = psf.SR_sky;
+    pltitle,"On-sky PSF with SR = " + var2str(arrondi(100*psf.SR_sky,1)) +"%";
     xytitles,"Arcsec","Arcsec";
   
-    window,3; clr; pli, *psf.diff,-l/2,-l/2,l/2,l/2,cmin=0,cmax = SR_sky;
+    window,3; clr; pli, *psf.diff,-l/2,-l/2,l/2,l/2,cmin=0,cmax = psf.SR_sky;
     pltitle,"Residual of the reconstruction ";
     xytitles,"Arcsec","Arcsec";
   
@@ -206,7 +330,7 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
          budget.ol,
          budget.static,
          budget.ncpa];
-    labs = ["!s_IR",
+    labs = ["!s_!e",
             "!s_tomo",
             "!s_alias",
             "!s_noise",
@@ -223,7 +347,7 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
     plg, *psf.EE_sky, boxsize;
     plg, [100,100],[-0.1,max(boxsize)*1.05],type=2,marks=0;
     xytitles,"Angular separation from center (arcsec)","Ensquared Energy (%)";
-    plt,"A: Reconstructed PSF",0.5,30,tosys=1,color=[128,128,128];
+    plt,"A: "+ meth + " PSF",0.5,30,tosys=1,color=[128,128,128];
     plt,"B: On-sky PSF",0.5,25,tosys=1;
     range,0,105;
     limits,-0.1,max(boxsize)*1.05;
@@ -236,7 +360,7 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
     xytitles,"D/!l","Normalized OTF";
     plt,"Dashed line: Perfect telescope",1,1,tosys=1;
     plt,"A: Sky OTF",1,0.8,tosys=1;
-    plt,"B: reconstructed OTF",1,0.6,tosys=1;
+    plt,"B: "+meth+" OTF",1,0.6,tosys=1;
     range,-.1,1.1;
 
     if(strpart(rtc.aoMode,1:4) == "MOAO"){
@@ -253,17 +377,17 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
   tf = tac(10);
   
   if(verb){
-    write,format="SR on-sky           = %.3g%s\n", 100*SR_sky,"%";
-    write,format="SR reconstructed    = %.3g%s\n", 100*SR_res,"%";
+    write,format="SR on-sky           = %.3g%s\n", 100*psf.SR_sky,"%";
+    write,format="SR reconstructed    = %.3g%s\n", 100*psf.SR_res,"%";
     write,format="SR Mar. from budget = %.3g%s\n", 100*budget.SRmar,"%";
     write,format="SR Par. from budget = %.3g%s\n", 100*budget.SRpar,"%";
     write,format="SR Bor. from budget = %.3g%s\n", 100*budget.SRborn,"%";
-    write,format="SR fit              = %.3g%s\n", 100*SR_fit,"%";
-    write,format="SR bw               = %.3g%s\n", 100*SR_bw,"%";
-    write,format="SR tomo+alias+noise = %.3g%s\n", 100*SR_tomo,"%";
-    write,format="SR static           = %.3g%s\n", 100*SR_stats,"%";
-    write,format="SR ncpa             = %.3g%s\n", 100*SR_ncpa,"%";
-    write,format="Diff of psf         = %.3g%s\n", 100*diffPSF,"%";
+    write,format="SR fit              = %.3g%s\n", 100*psf.SR_fit,"%";
+    write,format="SR bw               = %.3g%s\n", 100*psf.SR_bw,"%";
+    write,format="SR tomo+alias+noise = %.3g%s\n", 100*psf.SR_tomo,"%";
+    write,format="SR static           = %.3g%s\n", 100*psf.SR_stats,"%";
+    write,format="SR ncpa             = %.3g%s\n", 100*psf.SR_ncpa,"%";
+    write,format="Diff of psf         = %.3g%s\n", 100*psf.diffPsf,"%";
     write,format="Residual error      = %.4g nm rms\n", budget.res;
     write,format="Tomographic error   = %.4g nm rms\n", budget.tomo;
     write,format="Aliasing error      = %.4g nm rms\n", budget.alias;
@@ -276,13 +400,13 @@ func pracMain(timedata,averageMode=,Dir=,verb=,disp=)
     write,format="PSF reconstruction done on %.3g s\n",tf;
   }
 
-  pracResults = concatenatePracResults(procDir);
+  pracResults = concatenatePracResults(psfrMethod + "_" + averageMode,writeRes=writeRes);
   
   return pracResults;
 }
 
 
-func concatenatePracResults(void)
+func concatenatePracResults(method,writeRes=)
 /* DOCUMENT
 
  */
@@ -313,9 +437,8 @@ func concatenatePracResults(void)
   pracResults(6) = &[*psf.sky,*psf.res,*psf.diff,*psf.ncpa];
   //Ensquared Energy
   pracResults(7) = &[*psf.EE_sky,*psf.EE_res];
-  //OTFs
-  pracResults(8) = &[*otf.fit,*otf.bw,*otf.tomo,*otf.static];
-  
+
+  pracResults(8) = &[*otf.sky,*otf.res];
   /////////////////////
   // ..... PERFORMANCE
   //////////////////////////////////////////////////////////
@@ -325,9 +448,15 @@ func concatenatePracResults(void)
   //VED
   pracResults(10) = &budget.ved;
   //Strehl ratios
-  pracResults(11) = &(100*[psf.SR_sky,psf.SR_res,budget.SRmar,budget.SRpar,budget.SRborn,psf.SR_tomo,psf.SR_fit,psf.SR_bw,psf.SR_stats,psf.SR_cpa,budget.SRncpa,diffPSF]);
+  pracResults(11) = &(100*[psf.SR_sky,psf.SR_res,budget.SRmar,budget.SRpar,budget.SRborn,psf.SR_tomo,psf.SR_fit,psf.SR_bw,psf.SR_stats,psf.SR_ncpa,psf.diffPsf]);
 
-  writefits,"results/pracResults/pracResults_" + strpart(procDir,1:10) + "_" + timedata + ".fits",pracResults;
+  if(writeRes){
+    savingDir = "results/pracResults/resultsWith" + method + "_Method/";
+    if(!direxist(savingDir))
+      system,"mkdir " + savingDir;
+    writefits, savingDir + "pracResults_" + method + "_" + strpart(procDir,1:10) + "_" + timedata + ".fits",pracResults;
+
+  }
   
   return pracResults;
 }

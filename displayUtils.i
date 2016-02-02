@@ -516,3 +516,30 @@ func plz(zer, color=, type=, marks=)
       plmk, zer(J1-1:J2-1), indgen(J1:J2), color=color, marker=4, msize=0.3;
   }
 }
+
+func sortLabel(label_array)
+/*DOCUMENT
+  A tomoLabel is "MOAO4L3N", "SCAO","GLAO1L3N"... and the function returns a array of all the tomoLabel
+  without redondancy
+
+  ["MOAO4L3N","MOAO4L3N","SCAO","MOAO4L3N","GLAO4L3N","SCAO"] gives ["GLAO4L3N","MOAO4L3N","SCAO"].
+
+  All the tomoLabel are in res_all.slopetl.label
+ */
+{
+
+  //sort tomoLabel with the first letter
+  type = label_array(sort(label_array));
+  //defines first met label
+  wtype = where(type==type(1));
+  aa = "";
+  //loop to retrieve the same tomoLabel
+  while(1){
+    aa = grow(aa,type(wtype(0)));
+    if(wtype(0) != numberof(type)) wtype = where(type==type(wtype(0)+1));
+    else break;
+  }
+  aa = aa(2:);
+
+  return aa;
+}

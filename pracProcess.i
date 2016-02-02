@@ -1,22 +1,32 @@
 include, "pracMain.i";
 
+/*
+ __  __    _    ____ ____ _____     _______ 
+|  \/  |  / \  / ___/ ___|_ _\ \   / / ____|
+| |\/| | / _ \ \___ \___ \| | \ \ / /|  _|  
+| |  | |/ ___ \ ___) |__) | |  \ V / | |___ 
+|_|  |_/_/   \_\____/____/___|  \_/  |_____|
+                                            
+ _        _   _   _ _   _  ____ _   _ ___ _   _  ____ 
+| |      / \ | | | | \ | |/ ___| | | |_ _| \ | |/ ___|
+| |     / _ \| | | |  \| | |   | |_| || ||  \| | |  _ 
+| |___ / ___ \ |_| | |\  | |___|  _  || || |\  | |_| |
+|_____/_/   \_\___/|_| \_|\____|_| |_|___|_| \_|\____|
+                                                      
+*/
 
-
-func pracAll(void)
-/* DOCUMENT pracAll
+func pracAll(method)
+/* DOCUMENT pracAll,"mmse";
 
  */
 {
   
-  tmpDir          = "/home/omartin/CANARY/Data/PHASE_B/tmp/stycomartin/";
-  logFile         = tmpDir + "log.txt"; 
-  dialogFile      = tmpDir + "dialogFile.txt"; 
-  dataDir 	= "/home/omartin/CANARY/Data/PHASE_B/";
-
-  Dir  = listFile("/home/omartin/CANARY/Data/PHASE_B/");
-  Dir  = Dir(sort(Dir));
-  Dir  = Dir(17:21);
-  Dir  = "2012_10_04_onsky";
+  include,"pracConfig.i",1;
+  //Dir  = listFile(dataDir);
+  //Dir  = Dir(sort(Dir));
+  //  Dir  = Dir(17:21);
+  Dir = ["2013_09_13_onsky","2013_09_16_onsky","2013_09_15_onsky","2013_09_18_onsky",
+         "2013_09_17_onsky"];
   ndir = numberof(Dir);
   
   goodDir = "results/pracResults/";
@@ -32,40 +42,45 @@ func pracAll(void)
         w = where(strfind("script",pathstl)(0,) != -1);
         pathstl = pathstl(w);
         ntl = numberof(pathstl);
-        //PRAC_res = array(pointer,32);
-        //nl = 5;
         for(j=1;j<=ntl;j++){
           //extracts the date
           timetl = extractTime(pathstl(j));
-          p = pracMain(timetl,Dir=procDir,verb=0,disp=0);
+          p = pracMain(timetl,Dir=procDir,verb=0,disp=0,psfrMethod=method,writeRes=1);
           write,format="%s","Job done: " + var2str(100.*j/ntl) + "%\r";
         }
     }
   }
 }
 
+/*
+ ____ _____  _  _____ ___ ____ _____ ___ ____ ____  
+/ ___|_   _|/ \|_   _|_ _/ ___|_   _|_ _/ ___/ ___| 
+\___ \ | | / _ \ | |  | |\___ \ | |  | | |   \___ \ 
+ ___) || |/ ___ \| |  | | ___) || |  | | |___ ___) |
+|____/ |_/_/   \_\_| |___|____/ |_| |___\____|____/ 
+                                                    
+*/
 
-
-func statisticsOnSR(aomode,all=)
-/* DOCUMENT statisticsOnSR,"",all=1
+func statisticsOnSR(method,aomode,all=)
+/* DOCUMENT statisticsOnSR,"analytic",[],all=1
  */
 {
 
-  tmpDir     = "/home/omartin/CANARY/Data/PHASE_B/tmp/stycomartin/";
-  logFile    = tmpDir + "log.txt"; 
-  dialogFile = tmpDir + "dialogFile.txt"; 
-  dataDir    = "/home/omartin/CANARY/Data/PHASE_B/";
-  list       = listFile("results/pracResults");
-  nfile      = numberof(list);
+  include,"pracConfig.i",1;
 
-  SR_sky = SR_res = [];
+  savingDir  = "results/pracResults/resultsWith" + method + "_Vii_Method/"
+  list       = listFile(savingDir);
+  nfile      = numberof(list);
+  
+  obsmode = SR_sky = SR_res = [];
   for(i=1;i<=nfile;i++){
     //loading results
-    p = readfits("results/pracResults/" + list(i));
+    p = readfits(savingDir + list(i));
     //grabbing aomode
-    mode = (strchar(*p(1)))(2);
+    mode = strchar(*p(1))(2);
 
     if(mode == aomode || all == 1){
+      obsmode = grow(obsmode,mode);
       //grabbing the Strehl ratios
       SR_sky = grow(SR_sky,(*p(11))(1));
       SR_res = grow(SR_res,(*p(11))(2)) ;
@@ -73,9 +88,18 @@ func statisticsOnSR(aomode,all=)
     }
   }
 
+  //mode = sortLabel(obsmode);
+  mode = ["SCAO","MOAO4L3N","GLAO4L3N","MOAO4L3T"];
+  c  = ["black","red","blue","green"];
   m = max(max(SR_res),max(SR_sky));
   winkill,0;window,0,dpi=90,style="aanda.gs";
-  plmk, SR_res,SR_sky,marker = 4,msize=.2,width = 10;
+
+  for(j=1;j<=numberof(mode);j++){
+    w = where(obsmode == mode(j));
+    plmk, SR_res(w),SR_sky(w),marker = j,msize=.2,width = 10,color=c(j);
+    plt,mode(j),5,(1-j/10.)*m,color=c(j),tosys=1;
+  }
+  
   plg, [0,m],[0,m],marks=0,type=2;
   xytitles,"Sky Strehl ratio in H","Reconstructed Strehl ratio";
   if(is_string(aomode)){
@@ -87,19 +111,17 @@ func statisticsOnSR(aomode,all=)
   }
 }
 
-func statisticsOnEE(aomode,all=)
-/* DOCUMENT statisticsOnEE,[],all=1
+func statisticsOnEE(method,aomode,n,all=)
+/* DOCUMENT statisticsOnEE,"analytic",[],2,all=1
  */
 {
-
-  tmpDir     = "/home/omartin/CANARY/Data/PHASE_B/tmp/stycomartin/";
-  logFile    = tmpDir + "log.txt"; 
-  dialogFile = tmpDir + "dialogFile.txt"; 
-  dataDir    = "/home/omartin/CANARY/Data/PHASE_B/";
-  list       = listFile("results/pracResults");
-  nfile      = numberof(list);
-
-  EE_sky = EE_res = [];
+  include,"pracConfig.i",1;
+  
+  savingDir  = "results/pracResults/resultsWith" + method + "_Vii_Method/"
+  list  = listFile(savingDir);
+  nfile = numberof(list);
+   
+  obsmode = EE_sky = EE_res = [];
   nPixelsCropped = 128;
   nPixels = 512;
   lambda = 1.677e-6;
@@ -108,41 +130,124 @@ func statisticsOnEE(aomode,all=)
   D = 4.2;
   
   dl =  indgen(nPixelsCropped/2) * foV/nPixels;
-  n = where(dl>= 10*radian2arcsec*lambda/D)(1);
+  nn = where(dl>= n*radian2arcsec*lambda/D)(1);
+ 
+  
   for(i=1;i<=nfile;i++){
     //loading results
-    p = readfits("results/pracResults/" + list(i));
+    p = readfits(savingDir + list(i));
     //grabbing aomode
     mode = (strchar(*p(1)))(2);
 
     if(mode == aomode || all == 1){
+      obsmode = grow(obsmode,mode);
       //grabbing the Strehl ratios
-      EE_sky = grow(EE_sky,(*p(7))(n,1));
-      EE_res = grow(EE_res,(*p(7))(n,2)) ;
+      EE_sky = grow(EE_sky,(*p(7))(nn,1));
+      EE_res = grow(EE_res,(*p(7))(nn,2)) ;
       write,format="Files grabbed :%.3g%s\r",100.*i/nfile,"%";
     }
   }
 
+  //mode = sortLabel(obsmode);
+  mode = ["SCAO","MOAO4L3N","GLAO4L3N","MOAO4L3T"];
+  c  = ["black","red","blue","green"];
+  
   mm = max(max(EE_res),max(EE_sky));
-  mn = max(min(min(EE_res),min(EE_sky)),30);
+  mn = min(min(EE_res),min(EE_sky));
   winkill,0;window,0,dpi=90,style="aanda.gs";
-  plmk, EE_res,EE_sky,marker = 4,msize=.2,width = 10;
+
+  for(j=1;j<=numberof(mode);j++){
+    w = where(obsmode == mode(j));
+    plmk, EE_res(w),EE_sky(w),marker = j,msize=.2,width = 10,color=c(j);
+    plt,mode(j),mn*1.5,(1-j/10.)*mm,color=c(j),tosys=1;
+  }
+
   plg, [mn,mm],[mn,mm],marks=0,type=2;
-  limits,30,mm;range,30,mm;
-  xytitles,"Sky Ensquared energy (%) at 10!l/D in H","Rec. Ensquared Energy (%) at 10!l/D";
+  xytitles,"Sky Ensquared energy (%) at "+var2str(n)+ "!l/D in H","Rec. Ensquared Energy (%) at "+var2str(n)+"!l/D";
   if(is_string(aomode)){
     pltitle,"EE reconstruction performance in " + aomode;
-    pdf,"results/eeReconstructionIn" + aomode;
+    pdf,"results/eeReconstructionIn" + aomode + "_"+var2str(n) + "lonD";
   }else{
     pltitle,"EE reconstruction performance for all AO modes";
-    pdf,"results/eeReconstructionInAllAoModes";
+    pdf,"results/eeReconstructionInAllAoModes_"+var2str(n) + "lonD";
   }
 }
 
+/*
+ ____ ___ ____  ____  _        _ __   _____ _   _  ____ 
+|  _ \_ _/ ___||  _ \| |      / \\ \ / /_ _| \ | |/ ___|
+| | | | |\___ \| |_) | |     / _ \\ V / | ||  \| | |  _ 
+| |_| | | ___) |  __/| |___ / ___ \| |  | || |\  | |_| |
+|____/___|____/|_|   |_____/_/   \_\_| |___|_| \_|\____|
+                                                        
+
+*/
 
 
+func plotEE(timedata,procDir)
+/* DOCUMENT plotEE,"02h31m11s","2013_09_17_onsky/"
 
+ */
+{
+  p = pracMain(timedata,Dir=procDir,psfrMethod = "analytic",averageMode = "Vii",verb=0,disp=1);
+  eesky = (*p(7))(,1);
+  eea   = (*p(7))(,2);
+  otfsky  = (*p(8))(,,1);
+  otfa  = (*p(8))(,,2);
+  window,1;pdf,"results/psf_analytic_" + timedata + ".pdf"; 
+  p = pracMain(timedata,Dir=procDir,psfrMethod = "mmse",averageMode="",verb=0,disp=1);
+  eei   = (*p(7))(,2);
+  otfi  = (*p(8))(,,2);
+  window,1;pdf,"results/psf_mmse_" + timedata + ".pdf"; 
+  p = pracMain(timedata,Dir=procDir,psfrMethod = "ls",averageMode = "Vii",verb=0,disp=1);
+  eev   = (*p(7))(,2);
+  otfv  = (*p(8))(,,2);
+  window,1;pdf,"results/psf_ls_" + timedata + ".pdf";
+  
+  boxsize = span(1,cam.nPixelsCropped-3.,cam.nPixelsCropped) * cam.pixSize;
+  otel = roll(OTF_telescope(tel.diam,tel.obs,cam.nPixelsCropped,tel.pixSize*tel.nPixels/cam.nPixelsCropped));
+  
+  //Displaying EE
+  winkill,9;window,9,style="aanda.gs",dpi=90;clr;
 
+  plg, eesky, boxsize;
+  plg, eea,boxsize,color=[64,64,64];
+  plg, eev, boxsize,color=[100,100,100];
+  plg, eei, boxsize,color=[128,128,128];
+  plg, [100,100],[-0.1,max(boxsize)*1.05],type=2,marks=0;
+
+  fcut = radian2arcsec*cam.lambda/tel.pitch;
+  plg, [0,100],[fcut,fcut],type=2,marks=0;
+  plg, [0,100],[1,1]*1.22*radian2arcsec*cam.lambda/tel.diam,type=2,marks=0;
+  xytitles,"Angular separation from center (arcsec)","Ensquared Energy (%)";
+  plt,"A: On-sky PSF",1.,40,tosys=1;
+  plt,"B: Full analytic PSF",1.,30,tosys=1;
+  plt,"C: TS-based LS PSF",1.,20,tosys=1;
+  plt,"D: TS-based MMSE PSF",1.,10,tosys=1;
+  plt,"DM cut frequency",fcut*1.05,50,tosys=1;
+  plt,"1.22 !l/D",1.22*radian2arcsec*cam.lambda/tel.diam*1.05,10,tosys=1;
+  range,0,105;
+  limits,-0.1,max(boxsize)*1.05;
+pdf,"results/ee_" + timedata + ".pdf";
+
+  //Displaying OTFs
+  winkill,10;window,10,style="aanda.gs",dpi=90;clr;
+  dl =  indgen(cam.nPixelsCropped/2) * tel.foV/tel.nPixels;
+  plg,otfsky(cam.nPixelsCropped/2+1,cam.nPixelsCropped/2+1:)/max(otfsky),dl;
+  plg,otfa(cam.nPixelsCropped/2+1,cam.nPixelsCropped/2+1:)/max(otfa),dl;
+  plg,otfi(cam.nPixelsCropped/2+1,cam.nPixelsCropped/2+1:)/max(otfi),dl;
+  plg,otfv(cam.nPixelsCropped/2+1,cam.nPixelsCropped/2+1:)/max(otfv),dl;
+  plg,otel(cam.nPixelsCropped/2+1,cam.nPixelsCropped/2+1:)/max(otel),dl,type=2,marks=0;
+
+  xytitles,"D/!l","Normalized OTF";
+  plt,"Dashed line: Perfect telescope",1,1,tosys=1;
+  plt,"A: Sky OTF",1,0.8,tosys=1;
+  plt,"B: Full analytic OTF",1,0.6,tosys=1;
+  plt,"C: TS-based LS OTF",1,0.4,tosys=1;
+  plt,"D:  TS-based MMSE OTF",1,0.2,tosys=1;
+  range,-.1,1.1;
+  pdf,"results/otfs_" + timedata + ".pdf";
+}
 
 func plotProfiles(void)
 /* DOCUMENT plotProfiles;
@@ -654,380 +759,5 @@ func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
 */
 
 
-func plotSR(void)
-{
-  Dir = ["2013_09_17","2013_09_18","2013_09_16","2013_09_13","2013_09_15"];
-
-  ndir = numberof(Dir);
-  tmpDir          = "/mnt/CanaryData/tmp/stycomartin/";
-  logFile         = tmpDir + "log.txt"; 
-  dialogFile      = tmpDir + "dialogFile.txt"; 
-  dataDir 	  = "/mnt/CanaryData/";
-  
-
-  SRf = SRn = SRsky = snr = aomode =  een=eef = [];
-  
-  for(i=1;i<=ndir;i++){
-    //loading the results
-    pf = readfits("results/PRACres_" + Dir(i)+".fits",err=1,verb=0);
-    pn = readfits("results/PRACres_nofitl0_" + Dir(i)+".fits",err=1,verb=0);
-    //AO modes
-    aomode = grow(aomode,strchar(*pf(3)));
-    //Strehl ratios
-    SRsky = grow(SRsky,*pf(22));
-    snr = grow(snr,*pf(23));
-    SRf = grow(SRf,*pf(24));
-    SRn = grow(SRn,*pn(24));
-    eef = grow(eef,*pf(32));
-    een = grow(een,*pn(32));
-  }
-
-  w = where(aomode == "MOAO" & SRsky>10);
-  SRsky = SRsky(w);
-  SRf = SRf(w);
-  SRn = SRn(w);
-  snr = snr(w);
-  //Statistics
-  write,format="Number of processed files: %d\n",numberof(SRsky);
-  //Display
-  winkill,0;
-  window,0,style="aanda.gs",dpi=90;
-  plmk,SRf,SRsky,msize=.3,width=4,marker=4,color="red";
-  plg,[0,50],[0,50],marks=0,color="red";
-  xytitles,"Sky strehl ratio","SR from PSR-R with L_0_(h) fitting";
-  //Display
-  winkill,1;
-  window,1,style="aanda.gs",dpi=90;
-  plmk,SRn,SRsky,msize=.3,width=4,marker=4,color="blue";
-  plg,[0,50],[0,50],marks=0,color="black";
-  xytitles,"Sky strehl ratio","SR from PSR-R with infinite altitude L_0_";
-  //
-  winkill,2;
-  n = 200;
-  window,2,style="aanda.gs",dpi=90;
-  histo,eef,n,marks=0,color="red";
-  histo,een,n,marks=0,color="blue";
-  xytitles,"Accumulated error on the EE (%)","Counts";
-  plt,"L_0_(h) fitting",10,60,color="red",tosys=1;
-  plt,"no L_0_(h) fitting",10,50,color="blue",tosys=1;
-  limits,-1,30;
-  //
-  winkill,3;
-  window,3,style="aanda.gs",dpi=90;
-  n = 15;
-  af = 100*(SRf-SRsky)/SRsky;
-  an = 100*(SRn-SRsky)/SRsky;
-  wf= where(abs(af)<=100);
-  wn= where(abs(an)<=100);
-  histo,af(wf),n,color="red",marks=0;
-  histo,an(wn),n,color="blue",marks=0;
-  xytitles,"Error on the reconstructed SR (%)","Counts";
-  plt,"L_0_(h) fitting",-100,60,color="red",tosys=1;
-  plt,"no L_0_(h) fitting",-100,50,color="blue",tosys=1;
-  avg(abs(af(wf)));
-  avg(abs(an(wn)));
-
-}
 
 
-/*
- ____             __ _ _           
-|  _ \ _ __ ___  / _(_) | ___  ___ 
-| |_) | '__/ _ \| |_| | |/ _ \/ __|
-|  __/| | | (_) |  _| | |  __/\__ \
-|_|   |_|  \___/|_| |_|_|\___||___/
-*/
-
-func plotl0h(void,fitl0=)
-/* plotl0h,fitl0=1;
-   
-
- */
-{
-  Dir = ["2013_09_17","2013_09_18","2013_09_16","2013_09_13","2013_09_15"];
-
-  ndir = numberof(Dir);
-  tmpDir          = "/mnt/CanaryData/tmp/stycomartin/";
-  logFile         = tmpDir + "log.txt"; 
-  dialogFile      = tmpDir + "dialogFile.txt"; 
-  dataDir 	  = "/mnt/CanaryData/";
-  
-  l0s = "nofitl0";
-  if(fitl0) l0s = "" ;
-  cnh = alt = l0h = cnhalt = [];
-  
-  for(i=1;i<=ndir;i++){
-    procDir       = Dir(i) + "_onsky/";
-    dataDirRoot   = dataDir + procDir;
-    goodDir        = "profiles/" + procDir;
-    //takes all slopestl files
-    pathstl = listVersion(dataDirRoot,"fits","slopestl");
-    //keeps only the script files
-    w = where(strfind("script",pathstl)(0,) != -1);
-    pathstl = pathstl(w);
-    ntl = numberof(pathstl);
-
-    for(j=1;j<=ntl;j++){
-      //loading the prodiles
-      h = extractDate(pathstl(j));
-      p = readfits(goodDir + "ptrcn2h_"+h+"_nl_10"+l0s+".fits",err=1,verb=0);
-
-      if(is_pointer(p)){
-        //computing airmass
-        object = strcase(1,readFitsKey(pathstl(j),"OBJECT"));
-        tmp = givesCoordinatesFromObject(object);
-        array_ra = str2flt(decoupe(tmp(1),' '));
-        array_dec = str2flt(decoupe(tmp(2),' '));
-        airm = airmassFromDate(extractDate(pathstl(j)),array_ra,array_dec);
-        //unbiases from airmass
-        tmpc = (*p(1))/airm;
-        tmpa = (*p(2))/airm;
-        //merges results
-        cnh    = grow(cnh,tmpc);
-        cnhalt = grow(cnhalt,sum(tmpc(2:)));
-        alt    = grow(alt,tmpa);
-        l0h    = grow(l0h,*p(3));
-      }
-    }
-  }
-  //Statistics
-  w = where(alt > 0 & l0h <1e4);
-  write,format="Number of processed files: %d\n",numberof(l0h)/10;
-  write,format="Altitude layers with L_0<1e4m: %.3g%s\n",100.*numberof(w)/numberof(l0h(where(alt>0))),"%";
-  //Display
-  winkill,0;
-  window,0,style="aanda.gs",dpi=90;
-  plmk,alt/1000.,log10(l0h),msize=.1;
-  xytitles,"log_10_(L_0_ (m))","Altitude (km)";
-  range,-1,20;
-
-  La = l0h(w);
-  cnha = cnh(w);
-  winkill,1;
-  window,1,style="aanda.gs",dpi=90;
-  plmk,log10(La),0.103/cnha^(-3/5.), msize=.1;
-  xytitles,"Altitude seeing (arcsec)","log_10_(Altitude L_0_<1e4m (m))";
-  limits,-.1,0.5;
-  range,-2,5;
-  w = where(alt > 0 & l0h <=.5e4 & 0.103/cnh^(-3/5.) > .05);
-  write,format="Altitude layers with L_0<1e4m and a significant strength: %.3g%s\n",100.*numberof(w)/numberof(l0h(where(alt>0))),"%";
-
-  winkill,2;
-  window,2,style="aanda.gs",dpi=90;
-  histo, 0.103/cnh(where(alt==0))^(-3/5.),50,marks=0,color="red";
-  histo, 0.103/cnhalt^(-3/5.),100,marks=0,color="blue";
-  limits,0,2;
-  xytitles,"Seeing (arcsec)","Counts";
-
-  winkill,3;
-  window,3,style="aanda.gs",dpi=90;
-  histo, l0h(where(alt == 0 & l0h<50)),100,marks=0,color="red";
-  xytitles,"Ground Outer scale (m)","Counts";
-}
-
-func givesCoordinatesFromObject(object)
-{
-  object = strcase(1,object);
-
-  if(object=="A47" | object=="AST47"){
-    alpha  = "21 12 3.0";
-    delta = "38 36 45.0";
-  }
-  if(object=="A453" | object=="AST453"){
-    alpha  = "+1 36 44.400";
-    delta = "47 21 23.0";
-  }
-  if(object=="A396" | object=="AST396"){
-    alpha  = "6 48 15.0";
-    delta = "41 05 44.0";
-  }
-  if(object=="A53" | object=="AST53"){
-    alpha  = "+23 24 30.0";
-    delta = "40 53 55.0";
-  }
- if(object=="A110" | object=="AST110"){
-    alpha  = "+19 31 11";
-    delta = "34 56 02";
-  }
- if(object=="AS2" | object=="A32" | object=="AST32"){
-    alpha  = "+18 27 7.0";
-    delta = "26 52 34.0";
-  }
- if(object=="A34" | object=="AST34"){
-    alpha  = "+18 51 30.0";
-    delta = "10 20 3.0";
-  }
- if(object=="A51" | object=="AST51"){
-    alpha  = "+22 48 5";
-    delta = "39 17 3.0";
-  }
-
- if(object=="A10" | object=="AST10"){
-    alpha  = "+5 52 17.0";
-    delta = "32 34 36.0";
-  }
- 
- if(object=="AT1" | object=="ASTT1"){
-    alpha  = "+13 41 38.2";
-    delta = "+7 36 21.0";
-  }
-
- if(object=="A12" | object=="AST12"){
-    alpha  = "+6 1 9.0";
-    delta = "+23 20 29.0";
-  }
- 
- 
-  return [alpha,delta];
-
-}
-
-func airmassFromDate(date,alphaJ2000,deltaJ2000)
-/* DOCUMENT
- */
-{
-  //extract date from path
-  Y = str2int(strpart(date,1:4));
-  M = str2int(strpart(date,6:7));
-  D = str2int(strpart(date,9:10));
-  H = str2int(strpart(date,12:13))-1.;//correction temps local vers temps UTC
-  Mm = str2int(strpart(date,15:16));
-  S = str2int(strpart(date,18:19));
-  //defines coordinates
-  alpha = alpha2deg(alphaJ2000(1),alphaJ2000(2),alphaJ2000(3));
-  delta = dec2deg(deltaJ2000(1),deltaJ2000(2),deltaJ2000(3));
-  
-  return airmassFromCoordinates(Y, M, D, H, Mm, S, alpha, delta);
-}
-func alpha2deg(h, m, s) {
-        return dec2deg(h, m, s)*15;
-}
-
-func dec2deg(h, m, s) {
-        return h+m/60.+s/3600.;
-}
-func airmassFromCoordinates(Y, M, D, H, Mm, S, alpha, delta, latitude, longitude)
-/* DOCUMENT airmass(Y, M, D, H, Mm, S, alpha, delta, latitude, longitude)
-     
-   SEE ALSO:
- */
-{
-        LATITUDE = 28.7567;
-        LONGITUDE = -17.8917;
-
-        if (is_void(latitude)) latitude=LATITUDE;
-        if (is_void(longitude)) longitude=LONGITUDE;
-
-        alt = AAAltitude(Y, M, D, H, Mm, S, alpha, delta, latitude, longitude)(1);
-        return (1/cos(pi/2.-alt*pi/180));
-}
-func AAAltitude(Y, M, D, H, Mm, S, alpha, delta, latitude, longitude) {
-        LATITUDE = 28.7567;
-        LONGITUDE = -17.8917;
-
-        if (is_void(latitude)) latitude=LATITUDE;
-        if (is_void(longitude)) longitude=LONGITUDE;
-
-
-        lst = LST(Y, M, D, H, Mm, S, longitude) * 15.;
-        H = lst - alpha;
-        r = pi/180;
-        sina = sin(latitude*r)*sin(delta*r)+cos(latitude*r)*cos(delta*r)*cos(H*r);
-        alt = asin(sina) / r;
-        return alt;
-}
-func LST(Y, M, D, H, Mm, S, longitude) {
-
-        LONGITUDE = -17.8917;
-        if (is_void(longitude)) longitude=LONGITUDE;
-
-        JJ = JD(Y, M, D, H, Mm, S);
-        D = JJ - 2451545.;
-        GMST = 18.697374558 + 24.06570982441908 * D;
-        lst = GMST+longitude/15.;
-        lst%=24;
-        return lst;
-}
-
-func JD(Y, M, D, H, Mm, S) {
-        h=(H-12)/24. + Mm/24./60 + S/24./3600;
-        J=(1461 * (Y + 4800 + (M - 14)/12))/4 +(367 * (M - 2 - 12 * ((M - 14)/12)))/12 - (3 * ((Y + 4900 + (M - 14)/12)/100))/4 + D - 32075;
-        return double(J) + h;
-}
-
-/*
- ____  _        _   _                        _ _         
-/ ___|| |_ __ _| |_(_) ___  _ __   __ _ _ __(_) |_ _   _ 
-\___ \| __/ _` | __| |/ _ \| '_ \ / _` | '__| | __| | | |
- ___) | || (_| | |_| | (_) | | | | (_| | |  | | |_| |_| |
-|____/ \__\__,_|\__|_|\___/|_| |_|\__,_|_|  |_|\__|\__, |
-                                                   |___/ 
-*/
-
-
-func plotcnhvstime(Dir)
-/* plotcnhvstime,"2013_09_17"
-   
-
- */
-{
-
-  tmpDir          = "/mnt/CanaryData/tmp/stycomartin/";
-  logFile         = tmpDir + "log.txt"; 
-  dialogFile      = tmpDir + "dialogFile.txt"; 
-  dataDir 	  = "/mnt/CanaryData/";
-  procDir         = Dir + "_onsky/";
-  dataDirRoot     = dataDir + procDir;
-  goodDir         = "profiles/" + procDir;
-
-  cnh0 = cnha = L0 = t = [];
-  
-  //takes all slopestl files
-  pathstl = listVersion(dataDirRoot,"fits","slopestl");
-  //keeps only the script files
-  w = where(strfind("script",pathstl)(0,) != -1);
-  pathstl = pathstl(w);
-  ntl = numberof(pathstl);
-  
-  for(j=1;j<=ntl;j++){
-    //loading the prodiles
-    h = extractDate(pathstl(j));
-    p = readfits(goodDir + "ptrcn2h_"+h+"_nl_10nofitl0.fits",err=1,verb=0);
-
-    if(is_pointer(p)){
-      //computing airmass
-      object = strcase(1,readFitsKey(pathstl(j),"OBJECT"));
-      tmp = givesCoordinatesFromObject(object);
-      array_ra = str2flt(decoupe(tmp(1),' '));
-      array_dec = str2flt(decoupe(tmp(2),' '));
-      airm = airmassFromDate(extractDate(pathstl(j)),array_ra,array_dec);
-      //unbiases from airmass
-      tmpc = (*p(1))/airm;
-      //tmpa = (*p(2))/airm;
-      //merges results
-      cnh0 = grow(cnh0,(tmpc)(1));
-      cnha = grow(cnha,sum((tmpc)(2:)));
-      L0 = grow(L0,(*p(3))(1));
-      t   = grow(t,str2time(strpart(h,12:)));
-    }
-  }
-  
-  //Display
-  winkill,0;
-  window,0,style="aanda.gs",dpi=90;
-  plmk,0.103/cnh0^(-3/5.),t,msize=.1;
-  xytitles,"Local time (hour)","Ground Seeing (arcsec)";
-  range,0,1;
-  
-  winkill,1;
-  window,1,style="aanda.gs",dpi=90;
-  plmk,0.103/cnha^(-3/5.),t,msize=.1;
-  xytitles,"Local time (hour)","Altitude Seeing (arcsec)";
-  range,0,1;
-  
-  winkill,2;
-  window,2,style="aanda.gs",dpi=90;
-  plmk,L0,t,msize=.1;
-  xytitles,"Local time (hour)","Ground L_0_";
-  range,0,30;
-}

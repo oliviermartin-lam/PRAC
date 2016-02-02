@@ -1,4 +1,4 @@
-func computeOTFtomographic(averageMode,&dphi,verb=)
+func computeOTFtomographic(averageMode,&dphi,Cee=,verb=)
 /*DOCUMENT dphiFromUij(Cvv,"Vii")
 
   Returns the phase structure function (SF) average on the pupil from the tomographic error in rd^2. You have to specified the inputs mode as either "Uij" to average the  SF using Veran's method (1997), or "Vii" for using Gendron's method (2006) or "intersample" to use simplified Gendron's approach (2014 Kaust).
@@ -8,7 +8,8 @@ func computeOTFtomographic(averageMode,&dphi,verb=)
 {
   tic,3;
 
-  Cee = computesCeeMatrix(rtc.obsMode,verb=verb);
+  if(is_void(Cee))
+    Cee = computesCeeMatrix(rtc.obsMode,verb=verb);
 
   //computes the covariance matrix of voltages in volts^2
   Cvv = propagateError2Dm(Cee, *rtc.mc );
@@ -19,10 +20,8 @@ func computeOTFtomographic(averageMode,&dphi,verb=)
   
   // computation of influence function and defining the pupil
   N = tel.nPixels;
-  x = (indgen(N)-(N/2+1)) *tel.pixSize / (tel.diam/2.);   // x is expressed in pupil radius
-  x = x(,-:1:N);
-  y = transpose(x);
-  P = circularPupFunction(x,y,tel.obs); //pupil function expressed in pupil radius
+  P = circularPupFunction(tel.diam,tel.obs,tel.nPixels,tel.pixSize) ;
+  //pupil function expressed in pupil radius
 
   //autocorrelation of the pupil expressed in pupil radius^-1
   fftpup = fft(P);
@@ -47,6 +46,9 @@ func computeOTFtomographic(averageMode,&dphi,verb=)
       writefits,"fitsFiles/dm_modes.fits",fi;
     }
   }else{
+    x     = (indgen(N) -N/2)(,-:1:N);
+    x    *= tel.pixSize/(tel.diam/2.);
+    y     = transpose(x);
     fi = funcInflu(x,y,dm.x0);
   }
 
@@ -55,18 +57,18 @@ func computeOTFtomographic(averageMode,&dphi,verb=)
     for(i=1;i<=dm.nValidActu;i++){
       for(j=i;j<=dm.nValidActu;j++){
         //modes
-        Mi = fi(,,i);
-        Mj = fi(,,j);
+        Mi   = fi(,,i);
+        Mj   = fi(,,j);
         //Uij computation
-        t1 = (fft(Mi*Mj)*conjpupfft).re;
-        t2 = (fft(Mi)*conjugate(fft(Mj))).re;
-        Uij = fft(t1 - t2);
+        t1   = (fft(Mi*Mj)*conjpupfft).re;
+        t2   = (fft(Mi)*conjugate(fft(Mj))).re;
+        Uij  = fft(t1 - t2);
         //summing modes
         tmp +=  ((i!=j) + 1.)*Cvv(i,j)*Uij;
       }
     }
       //multiplynig by a mask
-      dphi = 2*msk * den * tmp.re * (2*pi/cam.lambda)^2.;
+      dphi = den * tmp.re * (2*pi/cam.lambda)^2.;
       //to get the SF in rd^2
       OTF_tomo  = exp(-0.5*dphi);
 
@@ -80,42 +82,54 @@ func computeOTFtomographic(averageMode,&dphi,verb=)
     //loop on actuators
     tmp = Mi = 0.*P;
     for(i=1;i<=dm.nValidActu;i++){
-      Mi =  M(,,i); //must be in volt^2 * meter^2
+      Mi   =  M(,,i); //must be in volt^2 * meter^2
       //Vii computation  in m^-2.volts^-2
-      Vii = (fft(Mi*Mi)*conjpupfft).re - abs(fft(Mi))^2;
+      Vii  = (fft(Mi*Mi)*conjpupfft).re - abs(fft(Mi))^2;
       //summing modes into dm basis
       tmp += l(i) * Vii; //must be in meters^-2
     }
 
-    dphi = den*fft(tmp).re * (2*pi/cam.lambda)^2. ; 
+    dphi = den * fft(tmp).re * (2*pi/cam.lambda)^2. ; 
     OTF_tomo  = exp(-0.5*dphi);
 
   }else if(averageMode == "intersample"){
-    map = array(0.0,N,N);
+
+    //Getting the map
     Cvvmap = getMap(Cvv,1);
-    // nber of elements on each side of the center of Cvvmap
-    ncov = dimsof(Cvvmap)(0);
+    ncov = dimsof(Cvvmap)(0);// nber of elements on each side of the center of Cvvmap
     ncmap = N/2+1;
     nelem = (ncov-1)/2;
-    start = ncmap - int(tel.diam/tel.pixSize);
-    stop = ncmap + int(tel.diam/tel.pixSize);
-    step = tel.pitchSize;
-    rr = start:stop:step;
-    map(rr,rr) = Cvvmap;
-    fi = funcInflu(x,y,dm.x0);
-    corr = fft(abs(fft(fi))^2*fft(map), -1).re/(numberof(fi)*tel.pitchSize^2) ;
-    dphi = corr(ncmap,ncmap) - corr;
-    dphi = roll(dphi); //dphi must be in meters^2
+
+    //defining the new map in the real domain
+    start = int(ncmap - tel.diam/tel.pixSize);
+    stop  = int(ncmap + tel.diam/tel.pixSize);
+    step  = tel.pitchSize;
+    rr    = start:stop:step;
+
+    cv = array(0.0,N,N);
+    cv(rr,rr) = Cvvmap; 
+
+    //TF of the influence function autocorrelation
+    A = abs(fft(fi))^2; // in m^-2
+    
+    //computing the correlation function
+    Sp = numberof(fi)*tel.pitchSize^2;
+    C  = roll(fft( A * fft(roll(cv)) ).re / Sp); // in m^2
+    
     //getting the phase structure function in rd^2
+    dphi  = max(C) - C; 
+    dphi  = roll(dphi); 
     dphi *= (2*pi/cam.lambda)^2.;
-    OTF_tomo  = exp(-0.5*dphi*msk);
+
+    //computinh the OTF
+    OTF_tomo  = exp(-0.5*dphi);
   }
 
   if(verb)
     write,format="done in %.3g s\n",tac(3);
 
   
-  return OTF_tomo*msk;
+  return OTF_tomo;
 }
 
 

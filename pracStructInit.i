@@ -220,7 +220,8 @@ struct psf_struct{
   double  SR_bw;
   double  SR_fit;
   double  SR_stats;
-  double  SR_cpa;
+  double  SR_ncpa;
+  double  diffPsf;
   double  FWHM_res;
   double  FWHM_sky;
   

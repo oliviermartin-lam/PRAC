@@ -62,8 +62,8 @@ func computePSDbandwidth(k,Fe,tret,gain,BP,northo,mode=,verb=)
 
  
   PSD_bw(N/2+1,N/2+1) = 0;
-  if(mode == "SCAO")
-    PSD_bw(northo) = 0.00;
+  //if(mode == "SCAO")
+  PSD_bw(northo) = 0.00;
 
   return PSD_bw;
 }
