@@ -16,7 +16,7 @@ include, "pracMain.i";
 */
 
 func pracAll(method)
-/* DOCUMENT pracAll,"mmse";
+/* DOCUMENT pracAll,"rtc";
 
  */
 {
@@ -32,7 +32,7 @@ func pracAll(method)
   goodDir = "results/pracResults/";
   if(!direxist(goodDir)) system,"mkdir " + goodDir;
   
-  for(i=1;i<=ndir;i++){
+  for(i=1;i<=1;i++){
     procDir = Dir(i);
     dataDirRoot = dataDir + procDir;
     //takes all slopestl files
@@ -42,10 +42,13 @@ func pracAll(method)
         w = where(strfind("script",pathstl)(0,) != -1);
         pathstl = pathstl(w);
         ntl = numberof(pathstl);
-        for(j=1;j<=ntl;j++){
+        for(j=1;j<=3;j++){
           //extracts the date
           timetl = extractTime(pathstl(j));
-          p = pracMain(timetl,Dir=procDir,verb=0,disp=0,psfrMethod=method,writeRes=1);
+          mode   = strcase(1,readFitsKey(pathstl(j),"OBS_MODE"));
+          if(!method == "rtc" | mode != "SCAO"){
+            p = pracMain(timetl,Dir=procDir,verb=0,disp=0,psfrMethod=method,writeRes=1);
+          }
           write,format="%s","Job done: " + var2str(100.*j/ntl) + "%\r";
         }
     }
