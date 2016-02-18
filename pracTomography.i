@@ -6,7 +6,7 @@
 |_____|_|  |_|  \___/|_|    |_|  |_|\__,_|\__|_|  |_|\___\___||___/                                  
  */
 
-func computesCeeMatrix(obsmode,verb=)
+func computesCeeMatrix(obsmode,para=,verb=)
 {
 
   //retrieves the noise covariance matrix in arcsec^2
@@ -16,12 +16,15 @@ func computesCeeMatrix(obsmode,verb=)
     //turbulence contribution. We now have to include, noise, aliasing and tracking contributions from off-axis WFS through rtc.R into covOL
     covOL = *covMatrix.parallel;
     indOff = norange(rtc.its);
+
+    if(para == 0){
+      //adding aliasing contribution from off-axis WFS
+      covOL(indOff,indOff) += (*covMatrix.aliasing)(indOff,indOff);
+      //adding the time-filtered off-axis noise contribution
+      fact = filteringNoiseFactor(rtc.loopGain,rtc.delay*rtc.Fe,rtc.obsMode);
+      covOL(indOff,indOff) += fact*Cnn(indOff,indOff);
+    }
     
-    //adding aliasing contribution from off-axis WFS
-    covOL(indOff,indOff) += (*covMatrix.aliasing)(indOff,indOff);
-    //adding the time-filtered off-axis noise contribution
-    fact = filteringNoiseFactor(rtc.loopGain,rtc.delay*rtc.Fe,rtc.obsMode);
-    covOL(indOff,indOff) += fact*Cnn(indOff,indOff);
     //adding tracking
     covOL(indOff,indOff) += (*covMatrix.tracking)(indOff,indOff);
 

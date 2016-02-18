@@ -1,3 +1,46 @@
+func computePSDnoiseClosedLoop(Fe,tret,gain,BP,northo,mode,verb=)
+/* DOCUMENT Wbp = computeBpSpectrum(k,V,dir,Fe,tret,gain,Wiener,northo)
+     
+   Bandwidth error. We use the transfer function of the system,
+   defined by a sampling frequency and delay, assuming a pure
+   close-loop integrator. The attenuation of the transfer function
+   Hcor(nu) is applied on all spatial frequency k=nu/V (units equation
+   is m^-1 = s^-1 / (m/s) ).
+
+   SEE ALSO:
+ */
+{
+
+  N = tel.nPixels;
+
+  // Computing the PSD of off-axis noise propagated through reconstructor
+  Cnn = *covMatrix.noise;
+  if(mode == "MOAO"){
+    sigNoise = computesNoisesError(takesDiag(Cnn),*rtc.R)(2);
+  }else{
+    s = (*rtc.slopes_dis)(slrange(rtc.its),);
+    s -= s(,avg);
+    sigNoise = sqrt(getNoiseZernike(s,rtc.its,arc=1))*1e3;
+  }
+  PSD_noise_ol  = (2*pi*sigNoise / tel.fourierPixSize / (cam.lambda*1e9))^2;
+  
+  nu = indgen(N)*Fe;
+  
+  if(mode == "MOAO"){
+    hn = hboMoao(nu, Fe, tret, gain, BP);
+  }else if(mode == "SCAO"){
+    hn = hcorScao(nu, Fe, tret, gain, BP);
+  }
+
+  msk = array(1.,N,N);
+  msk(northo) = 0;
+  PSD_noise_cl =  sum(abs(hn)^2) * PSD_noise_ol * msk;
+
+  PSD_noise_cl(N/2+1,N/2+1) = 0;  
+
+  return PSD_noise_cl;
+}
+
 func getNoiseZernike(s, icam, full=, inputNoise=,arc=)
 /* DOCUMENT noise_a_la_rico(slopes, icam, full=, inputNoise=)
    

@@ -83,3 +83,91 @@ func testFittingOtf(timedata,Dir=,verb=)
 
   return [srSquare,srCircle,srInflue,srE2E];
 }
+
+
+func plotTFMOAO(void){
+
+  N = 100;
+  tret = 3e-3;
+  Fe = 150.;
+  BP = 500;
+  f = span(0,Fe,N);
+  g = [0.1,0.5,1.];
+  ng = numberof(g);
+ 
+
+  winkill,0;window,0,dpi=90,style="aanda.gs";
+  logxy,1,0;
+  for(i=1;i<=numberof(g);i++){
+    hcor = hcorMoao(f,Fe,tret,g(i),BP);
+    hcor = 20*log10(abs(hcor(2:N/2)));
+    plg,hcor,f(2:N/2),marks=0;
+    x = Fe/10.; y = hcor(int(N/10.));
+    plt,"gain = " + var2str(g(i)),x,y,tosys=1;
+  }
+  plg,0*f(2:N/2),f(2:N/2),type=2,marks=0;
+  range,-30,10;
+  xytitles,"Frequency (Hz)","Amplitude (dB)";
+  pltitle, "MOAO correction transfer function";
+  
+  //TF bruit
+  
+  winkill,1;window,1,dpi=90,style="aanda.gs";
+  logxy,1,0;
+  for(i=1;i<=numberof(g);i++){
+    hbo = hboMoao(f,Fe,tret,g(i),BP);
+    hbo = 20*log10(abs(hbo(2:N/2)));
+    plg,hbo,f(2:N/2),marks=0;
+    x = Fe/10.; y = hbo(int(N/10.));
+    plt,"gain = " + var2str(g(i)),x,y,tosys=1;
+  }
+  
+  plg,0*f(2:N/2),f(2:N/2),type=2,marks=0;
+  range,-30,10;
+  xytitles,"Frequency (Hz)","Amplitude (dB)";
+  pltitle, "MOAO noise rejection transfer function";
+}
+
+func hcreep(freq,c,Fe)
+{
+  Te = 1./Fe;
+  p = 2i*pi*freq + 1e-12;
+  z = exp(p*Te);
+  euler = -.0577;
+  
+  hcreep = (z*z - c*euler*(z-1)-c*(z-1)*log(z))/(z*(z-1));
+
+  return hcreep;
+}
+
+func creepTransferFunction(void)
+/* DOCUMENT
+
+ */
+
+{
+
+N = 100;
+  tret = 3e-3;
+  Fe = 150.;
+  BP = 500;
+  f = span(0,Fe,N);
+  g = [0.1,0.5,1.];
+  ng = numberof(g);
+ 
+
+  winkill,0;window,0,dpi=90,style="aanda.gs";
+  logxy,1,0;
+  for(i=1;i<=numberof(g);i++){
+    hcor = hcreep(f,c);
+    hcor = 20*log10(abs(hcor(2:N/2)));
+    plg,hcor,f(2:N/2),marks=0;
+    x = Fe/10.; y = hcor(int(N/10.));
+    plt,"gain = " + var2str(g(i)),x,y,tosys=1;
+  }
+  plg,0*f(2:N/2),f(2:N/2),type=2,marks=0;
+  range,-30,10;
+  xytitles,"Frequency (Hz)","Amplitude (dB)";
+  pltitle, "Creeping transfer function";
+
+}

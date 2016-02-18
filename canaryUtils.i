@@ -180,7 +180,8 @@ func getOTFncpa(nPixels,procDir,&SR_bench,&PSF_ncpa,disp=)
   PSF_ncpa = processCanaryPSF(timencpa,SR_bench,box=nPixels,disp=disp);
   OTF_ncpa = fft(roll(PSF_ncpa)).re;
 
-  return OTF_ncpa;
+  SR_bench = getSR(roll(fft(OTF_ncpa).re),nPixels/2,nPixels/2,[],cam.dPixSizeOnLambda,nPixels,PSF_ncpa, snr);
+  return roll(OTF_ncpa);
 
 }
 

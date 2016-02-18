@@ -382,11 +382,7 @@ func gplh(y,x,color=,marks=,width=,type=)
   }
 }
 
-func clr(void)
-{
-  fma;
-  limits;
-}
+
 func fullVisuMap( Caa )
 /* DOCUMENT fullVisuMap( tmp ,ccc=, obs=)
    to compute maps from covariance matrices
@@ -542,4 +538,17 @@ func sortLabel(label_array)
   aa = aa(2:);
 
   return aa;
+}
+
+func clr(void)
+{
+  fma;
+  limits;
+}
+
+func winclose(void)
+{
+  for(i=1;i<=20;i++){
+    winkill;
+  }
 }

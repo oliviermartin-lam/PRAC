@@ -48,7 +48,7 @@ func computePSDbandwidth(k,Fe,tret,gain,BP,northo,mode=,verb=)
   vh    = atm.vh;
   //rescaling the integrated value to minimize the model error
   L0eff = (sum(atm.l0h^(-5/3.) * atm.cnh) / sum(atm.cnh))^(-3/5.);
-  l0h   = l0h *  atm.L0/L0eff;
+  l0h   = l0h * atm.L0/L0eff;
   //adding turbulent layers
   for(l = 1;l<=atm.nLayers;l++){
     nu_l = k * vh(l)/sqrt(2);
@@ -60,16 +60,20 @@ func computePSDbandwidth(k,Fe,tret,gain,BP,northo,mode=,verb=)
     PSD_bw +=  abs(hcor) * 0.023 * cnh(l) * (k^2 + 1./l0h(l)^2.)^(-11/6.);
   }
 
- 
-  PSD_bw(N/2+1,N/2+1) = 0;
-  //if(mode == "SCAO")
+  if(mode == "SCAO"){
+    nu = .5*k * atm.v/sqrt(2);
+    hcor = hcorScao(nu, Fe, tret, gain, BP);
+    PSD_bw = abs(hcor) * computeGlobalWienerSpectrum(k, N, r0tot, atm.L0);
+  }
+  
+  PSD_bw(N/2+1,N/2+1) = 0;  
   PSD_bw(northo) = 0.00;
 
   return PSD_bw;
 }
 
 
-func computeOTFfitting(geometry,SR_ncpa,verb=)
+func computeOTFfitting(geometry,SR_ncpa,power,verb=)
 /* DOCUMENT
  */
 {
@@ -85,26 +89,27 @@ func computeOTFfitting(geometry,SR_ncpa,verb=)
     DPHI_fit = dphi_highpass(r,tel.pitch) * r0tot^(-5./3);
 
   }else if(geometry == "square") {
+
     // initializing with the full frequency PSD
     k = computeSpatialFreqRad(tel.nPixels, tel.fourierPixSize, kx, ky);
     msk = defineDmFrequencyArea(k, kx, ky, geometry, dm.pitch );
+
     //defining the 0/1 square mask
     ndm    = where( msk );
-    northo = where( !msk );
+
     //filling the PSD
-    tot = numberof(northo);
-    PSD_fit = computeWienerSpectrum(k, tel.nPixels, r0tot, atm.L0);
+    PSD_fit = computeWienerSpectrum(k, tel.nPixels);
     PSD_fit(ndm) = 0.0;
 
-    //adding ncpa
-    WFE_ncpa = sqrt(- (cam.lambda*1e9/2/pi)^2 * log(SR_ncpa));
-    fact = 2*pi* WFE_ncpa / tel.fourierPixSize / (cam.lambda*1e9);
-    fact = fact^2;
-    PSD_fit(northo) += fact / double(tot);
+    //.... Adding ncpa with a f^-2 spectrum
 
+    PSD_fit  += computeNcpaPsd(N,tel.fourierPixSize,dm.pitch,SR_ncpa,power,cam.lambda);
+
+    //computing the phase structure function
     PSD_fit(N/2+1,N/2+1) = 0.0;
     PSD_fit(N/2+1,N/2+1) = -sum(PSD_fit);  
     DPHI_fit = 2*abs(fft(PSD_fit)) *  (tel.fourierPixSize^2);
+    
   }else{
 
     //foutier frequencies
@@ -136,7 +141,7 @@ func computeOTFfitting(geometry,SR_ncpa,verb=)
     Hif    /= max(abs(Hif));
     Hfilter = abs(1 - Hif)^2;
     //computing the fitting PSD
-    PSD_fit = computeWienerSpectrum(k, tel.nPixels, r0tot, atm.L0);
+    PSD_fit = computeWienerSpectrum(k, tel.nPixels);
     PSD_fit *= roll(Hfilter);
   
     PSD_fit(N/2+1,N/2+1) = 0.0;
@@ -173,7 +178,7 @@ func defineDmFrequencyArea(k, kx, ky, sgeom, pitch )
   return msk;
 }
 
-func computeWienerSpectrum(k, N, r0tot, outerScale)
+func computeGlobalWienerSpectrum(k, N, r0tot, outerScale)
 {
   Wiener = 0.023 * r0tot^(-5./3) * (k*k + 1./outerScale^2.)^(-11./6);
   // frequence 0 mise a 0, vu que de ttes facons elle est `fausse'
@@ -181,6 +186,28 @@ func computeWienerSpectrum(k, N, r0tot, outerScale)
   return Wiener;
 }
 
+func computeWienerSpectrum(k,N)
+{
+  Wiener = array(0.,N,N);
+  nl = numberof(atm.cnh);
+
+  //r0 at cam.lambda
+  r0tot = atm.r0*(cam.lambda/atm.lambda)^1.2;
+  //r0^(-5/3.) at cam.lambda
+  cnh   = atm.cnh * r0tot^(-5/3.)/sum(atm.cnh);
+  l0h   = atm.l0h;
+  //rescaling the integrated value to minimize the model error
+  L0eff = (sum(atm.l0h^(-5/3.) * atm.cnh) / sum(atm.cnh))^(-3/5.);
+  l0h   = l0h *  atm.L0/L0eff;
+  
+  for(l=1;l<=nl;l++){
+    Wiener += 0.023 * cnh(l) * (k*k + 1./l0h(l)^2.)^(-11./6);
+  }
+  
+  Wiener(N/2+1,N/2+1)=0;         
+
+  return Wiener;
+}
 
 /*
  _____ ____      _    _   _ ____  _____ _____ ____  
@@ -226,8 +253,8 @@ func hsysScao(freq,Fe,tret,G)
   //fractional delay in number of frames.
   delta = tret*Fe;
   //define the discrete z variable
-  p = 2i*pi*freq + 1e-12;
-  z = exp(p*Te);
+  p = 1i*2*pi*freq + 1e-12;
+  z = exp(-p*Te);
   //defines the transfer function
   hsys = G*(delta + (1.-delta)*z)/(z*(z-1));
 
@@ -252,6 +279,27 @@ func hbfScao(freq,Fe,tret,G,BP)
   return hbo/(1. + hbo);
 }
 
+func hnoiseScao(freq,Fe,tret,G,BP)
+/* DOCUMENT hsys = hbfScao(freq,Fe,tret,G,BP)
+
+   Returns the transfer function between the modes of the perpendicular
+   phase and the on-axis phase. It depends on the frequencies domain freq, the
+   sampling frequency freq (Hz), the gain of the loop and the delay
+   tret (seconds) between the end of the integration of the WFS and
+   the applying of the command.
+
+   Olivier Martin.
+    
+   SEE ALSO: hwfs,hsysScao,hcorScao,hdm
+ */
+{
+  hbo = hsysScao(freq,Fe,tret,G) * hdm(freq,BP) * hwfs(freq,Fe);
+  
+  hsys = hsysScao(freq,Fe,tret,G);
+
+  return hsys/(1. + hbo);
+}
+
 func hcorScao(freq,Fe,tret,G,BP)
 /* DOCUMENT   hcor(freq,Fe,tret,G,BP)
 
@@ -265,9 +313,7 @@ func hcorScao(freq,Fe,tret,G,BP)
    
 */
 {
-  Te=1./Fe;
-  p = 1i*2*pi*freq + 1e-12;
-    
+ 
   hbo = hsysScao(freq,Fe,tret,G) * hdm(freq,BP) * hwfs(freq,Fe);
 
   hcor = 1./(1. + hbo);

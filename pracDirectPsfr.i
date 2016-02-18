@@ -21,7 +21,6 @@ func mmseParallelModes(slopes)
 {
 
   g = slopes - slopes(,avg);
-
   
   //empirical covariance matrix of the residue
   C_all = g(,+) * g(,+)/dimsof(g)(0);
@@ -33,7 +32,6 @@ func mmseParallelModes(slopes)
   varNoise  = getNoiseVar(g);//in arcsec^2
   Cnn       = 0*C_all;
   takesDiag(Cnn) = varNoise;
-  
   //aliasing matrix
   if(rtc.obsMode == "MOAO"){
 
@@ -45,11 +43,11 @@ func mmseParallelModes(slopes)
     Crr = (*covMatrix.aliasing)(slrange(rtc.its),slrange(rtc.its));
   }
 
-  C_ee = C_all - Cnn  + Crr;
+  C_ee = C_all -  Cnn + Crr;
 
   //MMSE reconstruction
   Rmmse  = C_ee(,+) * C_all_m(+,);
-  gpara    = Rmmse(,+) * g(+,); // in arcsec
+  gpara  = Rmmse(,+) * g(+,); // in arcsec
 
   return gpara;
 }

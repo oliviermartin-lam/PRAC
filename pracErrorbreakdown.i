@@ -157,13 +157,9 @@ func computesNoisesError(noiseVar,R,nho=,full=)
   Cnn(,slrange(rtc.its)) = 0;
   tomonoise = computesTomoError(Cnn,R,full=full); // in nm rms
   if(!full){
-    sigNoiseTS = tsnoise(1);
-    sigNoiseTS_TTR = tsnoise(2);
-    
+    sigNoiseTS = tsnoise;
     sigNoiseTomo = tomonoise(1);
-    sigNoiseTomo_TTR = tomonoise(2);
-    
-    return [sigNoiseTS,sigNoiseTS_TTR,sigNoiseTomo,sigNoiseTomo_TTR];
+    return [sigNoiseTS,sigNoiseTomo];
   }else
     return [tsnoise,tomonoise];
 }

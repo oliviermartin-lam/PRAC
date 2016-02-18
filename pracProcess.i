@@ -102,12 +102,19 @@ func statisticsOnSR(method,aomode,all=)
   
   plg, [0,m],[0,m],marks=0,type=2;
   xytitles,"Sky Strehl ratio in H","Reconstructed Strehl ratio";
+
+ meth = "Full analytic method";
+  if(method == "ls")
+    meth = "TS-based LS method";
+  else if(method == "mmse")
+    meth = "TS-based MMSE method";
+    
   if(is_string(aomode)){
-    pltitle,"SR reconstruction performance in " + aomode;
-    pdf,"results/srReconstructionIn" + aomode;
+    pltitle, meth + " in " +  aomode;
+    pdf,"results/srReconstructionIn" + aomode + "_" + method;
   }else{
-    pltitle,"SR reconstruction performance for all AO modes";
-    pdf,"results/srReconstructionInAllAoModes";
+    pltitle, meth;
+    pdf,"results/srReconstructionInAllAoModes" + "_" + method;
   }
 }
 
@@ -120,7 +127,7 @@ func statisticsOnEE(method,aomode,n,all=)
   savingDir  = "results/pracResults/resultsWith" + method + "_Vii_Method/"
   list  = listFile(savingDir);
   nfile = numberof(list);
-   
+
   obsmode = EE_sky = EE_res = [];
   nPixelsCropped = 128;
   nPixels = 512;
@@ -164,12 +171,26 @@ func statisticsOnEE(method,aomode,n,all=)
 
   plg, [mn,mm],[mn,mm],marks=0,type=2;
   xytitles,"Sky Ensquared energy (%) at "+var2str(n)+ "!l/D in H","Rec. Ensquared Energy (%) at "+var2str(n)+"!l/D";
+
+  meth = "Full analytic method";
+  if(method == "ls")
+    meth = "TS-based LS method";
+  else if(method == "mmse")
+    meth = "TS-based MMSE method";
+
+  nn = var2str(n);
+  if(!is_integer(n)){
+    nn = var2str(n);
+    w  = strfind(".",nn);
+    nn = streplace(nn,w,"-");
+  }
+  
   if(is_string(aomode)){
-    pltitle,"EE reconstruction performance in " + aomode;
-    pdf,"results/eeReconstructionIn" + aomode + "_"+var2str(n) + "lonD";
+    pltitle, meth + " in " +  aomode;
+    pdf,"results/eeReconstructionIn" + aomode + "_"+nn + "lonD_" + method;
   }else{
-    pltitle,"EE reconstruction performance for all AO modes";
-    pdf,"results/eeReconstructionInAllAoModes_"+var2str(n) + "lonD";
+    pltitle, meth;
+    pdf,"results/eeReconstructionInAllAoModes_"+nn + "lonD_" + method;
   }
 }
 

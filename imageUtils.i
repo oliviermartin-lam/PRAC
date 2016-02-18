@@ -646,10 +646,14 @@ func getSR(Psf,x0,y0, pixelsMap,nLDpix,box, &processedPsf, &snr)
   
   // deadpixels correction (the "dead pixel frame" global variable  *irData.deadPixIndex
   // is defined at the end of widget_loop.i)
-  im = CorrDeadPixFrame(pixelsMap, Psf);
-  
+  if(!is_void(pixelsMap))
+    im = CorrDeadPixFrame(pixelsMap, Psf);
+  else
+    im = Psf;
   // FIRST ROUGH ITERATION ..............
-  imBase = cropImage(im, x0, y0,box); 
+  imBase = cropImage(im, x0, y0,box);
+
+  
   airyPeak = (pi/4) * (1-tel.obs^2) * (nLDpix)^2;
   im = evalBg( imBase, dead=2 );        // remove background (evaluated on image edges)
   sumim = sum(im);
@@ -722,6 +726,7 @@ func strehlSNR(im)
 
   return abs(fbg,fpeak);
 }
+
 
 /*
  _____                                          _ 

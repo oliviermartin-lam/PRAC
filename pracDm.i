@@ -1,4 +1,4 @@
-func computeOTFtomographic(averageMode,&dphi,Cee=,verb=)
+func computeOTFtomographic(averageMode,&dphi,para=,Cee=,verb=)
 /*DOCUMENT dphiFromUij(Cvv,"Vii")
 
   Returns the phase structure function (SF) average on the pupil from the tomographic error in rd^2. You have to specified the inputs mode as either "Uij" to average the  SF using Veran's method (1997), or "Vii" for using Gendron's method (2006) or "intersample" to use simplified Gendron's approach (2014 Kaust).
@@ -9,7 +9,7 @@ func computeOTFtomographic(averageMode,&dphi,Cee=,verb=)
   tic,3;
 
   if(is_void(Cee))
-    Cee = computesCeeMatrix(rtc.obsMode,verb=verb);
+    Cee = computesCeeMatrix(rtc.obsMode,para=para,verb=verb);
 
   //computes the covariance matrix of voltages in volts^2
   Cvv = propagateError2Dm(Cee, *rtc.mc );
