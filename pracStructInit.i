@@ -48,6 +48,8 @@ struct telescope_struct{
   double lambdaPerFov;
   double dPerFov;
   double airyPeak;
+  double aera;
+  double aeraInPix;
 };
 
 struct rtc_struct{
@@ -171,6 +173,7 @@ struct covmatrix_struct{
   pointer parallel;
   pointer noise;
   pointer tracking;
+  pointer R;
 };
 
 struct budget_struct{

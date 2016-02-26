@@ -727,7 +727,106 @@ func strehlSNR(im)
   return abs(fbg,fpeak);
 }
 
+/*
+ _______        ___   _ __  __ 
+|  ___\ \      / / | | |  \/  |
+| |_   \ \ /\ / /| |_| | |\/| |
+|  _|   \ V  V / |  _  | |  | |
+|_|      \_/\_/  |_| |_|_|  |_|
+*/
 
+
+func getPsfFwhm(im,pixSize,&a,fit=)
+/* DOCUMENT fwhm = getPsfFwhm(im,pixSize,a,fit=2)
+
+ */
+{
+
+  
+  N   = dimsof(im)(2);
+  
+  if(fit==1){
+    //Grabbing a cut of the psf
+    a   = [1.,0,1];
+    x   = (indgen(N) -N/2-1)(,-:1:N);
+    y   = transpose(x);    
+    r   = abs(x,y);
+    res = lmfit(gauss,r,a,im,fit=[1,3]);
+
+    sigma = a(3);
+    fwhm  = 2*sqrt(2*log(2))*sigma;
+  
+    return fwhm*pixSize;
+
+  }else if(fit == 2){
+
+    //Grabbing a cut of the psf
+    a   = [1.,1.,1.];
+    x   = (indgen(N) -N/2-1)(,-:1:N);
+    y   = transpose(x);    
+    r   = abs(x,y);
+    res = lmfit(moffat,r,a,im,fit=[1,2,3]);
+
+    fwhm  = 2*a(2)*sqrt(2^(1./a(3)) -1.);
+    
+    return fwhm*pixSize;
+    
+  }else{
+
+    im /= max(im);
+    p1d  = im(N/2+1,N/2+1:) + im(N/2+1:,N/2+1) ;
+    p1d /= max(p1d);
+    //circularAveragePsf(im);
+    
+    //Determine the first point below .5
+    k=1;
+    while(p1d(k) > 0.5 & k<N){
+      k++;
+    }
+
+    k1 = k-1;
+    k0 = k;
+
+
+    if(k0 >= 3){
+      
+      y = p1d(k0-2:k0+2);
+      x = indgen(k0-2:k0+2);
+      tmp = (avg(x*x)-avg(x)^2.);
+      a = (avg(y*x)-avg(x)*avg(y))/tmp;
+      b = avg(y) - a*avg(x);
+
+    }else if(k0>1 && k0<3){
+
+      //Linear regression with the previous sample
+      a = (p1d(k1) - p1d(k0))/(k1-k0);
+      b = (-p1d(k1)*k0 + p1d(k0)*k1) /(k1-k0);
+      k05 = (0.5-b)/a;
+
+    }
+    else{
+      return 0;
+    }
+
+    k05 = (0.5-b)/a;  // solve equation a*k05 + b = 0.5
+  
+    return k05*pixSize;
+  }
+}
+
+
+func moffat(r,a)
+/* DOCUMENT
+
+ */
+{
+  I0    = a(1);
+  alpha = a(2);
+  beta  = a(3);
+  
+  return I0*(1. + r*r/(alpha*alpha))^(-beta); 
+
+}
 /*
  _____                                          _ 
 | ____|_ __  ___  __ _ _   _  __ _ _ __ ___  __| |

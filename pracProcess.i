@@ -25,14 +25,14 @@ func pracAll(method)
   //Dir  = listFile(dataDir);
   //Dir  = Dir(sort(Dir));
   //  Dir  = Dir(17:21);
-  Dir = ["2013_09_13_onsky","2013_09_16_onsky","2013_09_15_onsky","2013_09_18_onsky",
-         "2013_09_17_onsky"];
+  Dir = ["2013_09_13_onsky","2013_09_16_onsky","2013_09_15_onsky","2013_09_18_onsky", "2013_09_17_onsky"];
+
   ndir = numberof(Dir);
   
   goodDir = "results/pracResults/";
   if(!direxist(goodDir)) system,"mkdir " + goodDir;
   
-  for(i=1;i<=1;i++){
+  for(i=1;i<=ndir;i++){
     procDir = Dir(i);
     dataDirRoot = dataDir + procDir;
     //takes all slopestl files
@@ -42,13 +42,17 @@ func pracAll(method)
         w = where(strfind("script",pathstl)(0,) != -1);
         pathstl = pathstl(w);
         ntl = numberof(pathstl);
-        for(j=1;j<=3;j++){
+        for(j=1;j<=ntl;j++){
           //extracts the date
           timetl = extractTime(pathstl(j));
           mode   = strcase(1,readFitsKey(pathstl(j),"OBS_MODE"));
-          if(!method == "rtc" | mode != "SCAO"){
+          
+          if(method == "rtc" && mode == "SCAO"){
+            continue;
+          }else{
             p = pracMain(timetl,Dir=procDir,verb=0,disp=0,psfrMethod=method,writeRes=1);
           }
+
           write,format="%s","Job done: " + var2str(100.*j/ntl) + "%\r";
         }
     }
@@ -92,37 +96,138 @@ func statisticsOnSR(method,aomode,all=)
   }
 
   //mode = sortLabel(obsmode);
-  mode = ["SCAO","MOAO4L3N","GLAO4L3N","MOAO4L3T"];
-  c  = ["black","red","blue","green"];
+  mode = ["SCAO","MOAO4L3N","MOAO3N","MOAO4L3T","GLAO"];
+  c  = ["black","red","blue","magenta","green"];
   m = max(max(SR_res),max(SR_sky));
   winkill,0;window,0,dpi=90,style="aanda.gs";
 
   for(j=1;j<=numberof(mode);j++){
-    w = where(obsmode == mode(j));
-    plmk, SR_res(w),SR_sky(w),marker = j,msize=.2,width = 10,color=c(j);
-    plt,mode(j),5,(1-j/10.)*m,color=c(j),tosys=1;
+    if(mode(j) != "GLAO")
+      w = where(obsmode == mode(j));
+    else
+      w = where(strpart(obsmode,1:4) == mode(j));
+    
+    if(is_array(w)){
+      plmk, SR_res(w),SR_sky(w),marker = j,msize=.2,width = 10,color=c(j);
+      plt,mode(j),5,(1-j/10.)*m,color=c(j),tosys=1;
+    }
   }
   
   plg, [0,m],[0,m],marks=0,type=2;
   xytitles,"Sky Strehl ratio in H","Reconstructed Strehl ratio";
-
- meth = "Full analytic method";
+  limits,-1,m*1.05;
+  range,-1,m*1.05;
+  
+ meth = "Estimation method";
   if(method == "ls")
-    meth = "TS-based LS method";
-  else if(method == "mmse")
-    meth = "TS-based MMSE method";
+    meth = "TS-based method";
+  else if(method == "rtc")
+    meth = "RTC-based method";
     
   if(is_string(aomode)){
     pltitle, meth + " in " +  aomode;
     pdf,"results/srReconstructionIn" + aomode + "_" + method;
   }else{
     pltitle, meth;
-    pdf,"results/srReconstructionInAllAoModes" + "_" + method;
+    pdf,"results/statistics/srReconstructionInAllAoModes" + "_" + method;
+  }
+}
+
+func statisticsOnFWHM(method,aomode,all=)
+/* DOCUMENT statisticsOnFWHM,"analytic",[],all=1
+ */
+{
+
+  include,"pracConfig.i",1;
+
+  savingDir  = "results/pracResults/resultsWith" + method + "_Vii_Method/"
+  list       = listFile(savingDir);
+  nfile      = numberof(list);
+  pixSize    = 0.0297949;
+  //pixSize   *= 128./512.;
+  
+  obsmode = FWHM_sky = FWHM_res = [];
+  os = or = array(0.,512,512);
+  N  = 128;
+  xi = 256-N/2+1;
+  xf = 256 + N/2;
+    
+  for(i=1;i<=nfile;i++){
+    //loading results
+    p = readfits(savingDir + list(i));
+    //grabbing aomode
+    mode = strchar(*p(1))(2);
+
+    if(mode == aomode || all == 1){
+      obsmode = grow(obsmode,mode);
+      //grabbing PSFs
+      ps = (*p(6))(,,1);
+      pr = (*p(6))(,,2);
+
+      /*
+      //grabbing OTFs
+      otfSky = (*p(8))(,,1);
+      otfRes = (*p(8))(,,2);
+      os(xi:xf,xi:xf) = otfSky;
+      or(xi:xf,xi:xf) = otfRes;
+      ps = roll(fft(roll(os)).re);
+      pr = roll(fft(roll(or)).re);
+      ps/=max(ps);pr/=max(pr);v
+      */
+      //computing FWHM
+      FWHM_sky = grow(FWHM_sky,1e3*getPsfFwhm(ps,pixSize,fit=0));
+      FWHM_res = grow(FWHM_res,1e3*getPsfFwhm(pr,pixSize,fit=0)) ;
+      
+      write,format="Files grabbed :%.3g%s\r",100.*i/nfile,"%";
+    }
+  }
+
+  //mode = sortLabel(obsmode);
+  mode = ["SCAO","MOAO4L3N","MOAO3N","MOAO4L3T","GLAO"];
+  c  = ["black","red","blue","magenta","green"];
+  w = where(FWHM_sky < 200.  & FWHM_res < 200. & FWHM_sky>0 & FWHM_res > 0);
+  FWHM_res = FWHM_res(w);
+  FWHM_sky = FWHM_sky(w);
+  obsmode  = obsmode(w);
+  m = max(max(FWHM_res),max(FWHM_sky));
+  n = min(min(FWHM_res),min(FWHM_sky));
+  winkill,0;window,0,dpi=90,style="aanda.gs";
+
+  for(j=1;j<=numberof(mode);j++){
+    if(mode(j) != "GLAO")
+      w = where(obsmode == mode(j));
+    else
+      w = where(strpart(obsmode,1:4) == mode(j));
+    
+    if(is_array(w)){
+      plmk, FWHM_res(w),FWHM_sky(w),marker = j,msize=.2,width = 10,color=c(j);
+      plt,mode(j),.85*m,(1-j/10.)*m,color=c(j),tosys=1;
+    }
+  }
+  
+  
+  plg, [n,m],[n,m],marks=0,type=2;
+  xytitles,"Sky FWHM in H (mas)","Reconstructed FWHM (mas)";
+  limits,n*.95,m*1.05;
+  range,n*.95,m*1.05;
+  
+ meth = "Estimation method";
+  if(method == "ls")
+    meth = "TS-based method";
+  else if(method == "rtc")
+    meth = "RTC-based method";
+    
+  if(is_string(aomode)){
+    pltitle, meth + " in " +  aomode;
+    pdf,"results/fwhmReconstructionIn" + aomode + "_" + method;
+  }else{
+    pltitle, meth;
+    pdf,"results/statistics/fwhmReconstructionInAllAoModes" + "_" + method;
   }
 }
 
 func statisticsOnEE(method,aomode,n,all=)
-/* DOCUMENT statisticsOnEE,"analytic",[],2,all=1
+/* DOCUMENT statisticsOnEE,"analytic",[],1.3,all=1
  */
 {
   include,"pracConfig.i",1;
@@ -159,27 +264,34 @@ func statisticsOnEE(method,aomode,n,all=)
   }
 
   //mode = sortLabel(obsmode);
-  mode = ["SCAO","MOAO4L3N","GLAO4L3N","MOAO4L3T"];
-  c  = ["black","red","blue","green"];
+  mode = ["SCAO","MOAO4L3N","MOAO3N","MOAO4L3T","GLAO"];
+  c  = ["black","red","blue","magenta","green"];
   
   mm = max(max(EE_res),max(EE_sky));
   mn = min(min(EE_res),min(EE_sky));
   winkill,0;window,0,dpi=90,style="aanda.gs";
 
   for(j=1;j<=numberof(mode);j++){
-    w = where(obsmode == mode(j));
-    plmk, EE_res(w),EE_sky(w),marker = j,msize=.2,width = 10,color=c(j);
-    plt,mode(j),mn*1.5,(1-j/10.)*mm,color=c(j),tosys=1;
+
+    if(mode(j) != "GLAO")
+      w = where(obsmode == mode(j));
+    else
+      w = where(strpart(obsmode,1:4) == mode(j));
+    
+    if(is_array(w)){
+      plmk, EE_res(w),EE_sky(w),marker = j,msize=.2,width = 10,color=c(j);
+      plt,mode(j),mn+mm/10.,(1-j/10.)*mm,color=c(j),tosys=1;
+    }
   }
 
   plg, [mn,mm],[mn,mm],marks=0,type=2;
   xytitles,"Sky Ensquared energy (%) at "+var2str(n)+ "!l/D in H","Rec. Ensquared Energy (%) at "+var2str(n)+"!l/D";
 
-  meth = "Full analytic method";
+  meth = "Estimation method";
   if(method == "ls")
-    meth = "TS-based LS method";
-  else if(method == "mmse")
-    meth = "TS-based MMSE method";
+    meth = "TS-based method";
+  else if(method == "rtc")
+    meth = "RTC-based method";
 
   nn = var2str(n);
   if(!is_integer(n)){
@@ -193,7 +305,7 @@ func statisticsOnEE(method,aomode,n,all=)
     pdf,"results/eeReconstructionIn" + aomode + "_"+nn + "lonD_" + method;
   }else{
     pltitle, meth;
-    pdf,"results/eeReconstructionInAllAoModes_"+nn + "lonD_" + method;
+    pdf,"results/statistics/eeReconstructionInAllAoModes_"+nn + "lonD_" + method;
   }
 }
 

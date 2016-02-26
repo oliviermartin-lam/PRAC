@@ -440,39 +440,40 @@ func covMatModel(learn, fitEstim,loworder=,verb=)
 
 func trackingMatCov(tracking,covLearn)
 /* DOCUMENT trackingMatCov(tracking, fullMat)
-     Creates a checkerboard on top of the covariance matrix, with
-     <x^2>=tracking(1) on all the x/x covariance areas,
-     <y^2>=tracking(2) on all the y/y covariance areas,
-     <xy> =tracking(3) on all the x/y and y/x covariance areas.
+   Creates a checkerboard on top of the covariance matrix, with
+   <x^2>=tracking(1) on all the x/x covariance areas,
+   <y^2>=tracking(2) on all the y/y covariance areas,
+   <xy> =tracking(3) on all the x/y and y/x covariance areas.
    SEE ALSO:
- */
+*/
 {
   fullMat = covLearn;
   for(p=1;p<=rtc.nWfs;p++) {
-    for(q=p;q<=rtc.nWfs;q++) {
-      if( wfs(p).type!=2 && wfs(q).type!=2 ) {
-        // ranges for X-slopes
-        xrp = tslindex(p):(tslindex(p)+wfs(p).nValidSubAp-1);
-        xrq = tslindex(q):(tslindex(q)+wfs(q).nValidSubAp-1);
-        // ranges for Y-slopes
-        yrp = tslindex(p)+wfs(p).nValidSubAp:tslindex(-p);
-        yrq = tslindex(q)+wfs(q).nValidSubAp:tslindex(-q);
-        // addition of constants
-        fullMat( xrp, xrq ) += tracking(1);
-        fullMat( yrp, yrq ) += tracking(2);
-        fullMat( xrp, yrq ) += tracking(3);
-        fullMat( yrp, xrq ) += tracking(3);
+    if( wfs(p).type!=2 && wfs(p).type!=0 ) {
+      for(q=p;q<=rtc.nWfs;q++) {
+        if( wfs(q).type!=2 && wfs(q).type!=0 ) {
+          // ranges for X-slopes
+          xrp = tslindex(p):(tslindex(p)+wfs(p).nValidSubAp-1);
+          xrq = tslindex(q):(tslindex(q)+wfs(q).nValidSubAp-1);
+          // ranges for Y-slopes
+          yrp = tslindex(p)+wfs(p).nValidSubAp:tslindex(-p);
+          yrq = tslindex(q)+wfs(q).nValidSubAp:tslindex(-q);
+          // addition of constants
+          fullMat( xrp, xrq ) += tracking(1);
+          fullMat( yrp, yrq ) += tracking(2);
+          fullMat( xrp, yrq ) += tracking(3);
+          fullMat( yrp, xrq ) += tracking(3);
         
-        if(q!=p){
-          fullMat( xrq, xrp ) += tracking(1);
-          fullMat( yrq, yrp ) += tracking(2);
-          fullMat( xrq, yrp ) += tracking(3);
-          fullMat( yrq, xrp ) += tracking(3);
+          if(q!=p){
+            fullMat( xrq, xrp ) += tracking(1);
+            fullMat( yrq, yrp ) += tracking(2);
+            fullMat( xrq, yrp ) += tracking(3);
+            fullMat( yrq, xrp ) += tracking(3);
+          }
         }
       }
     }
   }
- 
   
   return fullMat;
 }

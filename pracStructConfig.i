@@ -196,9 +196,10 @@ func defineTel(pathdata,verb=)
   // pixel size in the Fourier domain
   tel.fourierPixSize = 1./tel.foV;
   tel.lambdaPerFov = tel.fourierPixSize * ast.photometry * radian2arcsec; 
-  tel.dPerFov = tel.fourierPixSize * tel.diam;
+  tel.dPerFov  = tel.fourierPixSize * tel.diam;
   tel.airyPeak = (pi/4)*(1 - tel.obs^2) * cam.dPixSizeOnLambda^2;
-
+  tel.aera     = tel.diam^2*(1-tel.obs^2)*pi/4;
+  tel.aeraInPix= tel.aera / tel.pixSize^2;
 }
 
 func defineWfs(pathdata,verb=)
@@ -412,6 +413,17 @@ func defineAtm(pathdata,&varNoise,verb=)
   atm.vh       = abs(*ptr_prof(5));
   sys.tracking = *ptr_prof(4);
 
+  //Managing bad identification 
+  w = where(atm.cnh > 200);
+  if(is_array(w)){
+    for(i=1;i<=numberof(w);i++){
+      if(atm.l0h(w(i)) <1){
+        atm.cnh(w(i)) = 0.;
+        atm.l0h(w(i))  = 100.;
+      }
+    }
+  }
+    
   // Re doing windspeed profile estimation
   /*
   learn.nl = atm.nLayers;
@@ -528,4 +540,16 @@ func defineCovMat(varNoise,verb=)
   // Isoplanatic contribution from something else turbulence (vibration, tracking telescope...)
   covTracking = 0*(*covMatrix.learn);
   covMatrix.tracking = &trackingMatCov(sys.tracking, covTracking);
+
+
+  Coffoff = (*covMatrix.learn +  *covMatrix.noise)(norange(rtc.its),norange(rtc.its));
+  Conoff  = (*covMatrix.parallel)(slrange(rtc.its),norange(rtc.its));
+
+  //inversion
+  iCoffoff = invgen(Coffoff,cond=500);
+
+  //computation
+  covMatrix.R = &(Conoff(,+) * iCoffoff(+,));
+
+    
 }

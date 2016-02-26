@@ -186,58 +186,46 @@ func getOTFncpa(nPixels,procDir,&SR_bench,&PSF_ncpa,disp=)
 }
 
 
-func ncpaPhaseDiversity(procDir,nm,nlow,&psfNcpa,&a,verb=,disp=)
-/* DOCUMENT psf2 = ncpaPhaseDiversity("2013_09_17_onsky/",20,36,psf,a)
+func ncpaPhaseDiversity(modes,&sigNcpa)
+/* DOCUMENT a = ncpaPhaseDiversity("zernike",s)
 
  */
 {
-  N = cam.nPixelsCropped;
-  OTF_ncpa = getOTFncpa(N,procDir,SR_bench,psfNcpa,disp=disp);
+  path   = "fitsFiles/irphasediv_2013-05-23_20h53m28s_80.fits";
+  imCube = double(readfits(path));
+  imCube = clip(imCube,0.);
+  N      = dimsof(imCube)(2);
+  nim    = dimsof(imCube)(0);
+  imCent = imCube(N/2-24:N/2+25,N/2-24:N/2+25,);
 
-
-  require,"/home/omartin/CANARY/Algorithms/OPRA/opra.i";
-
-  modes     = "zernike"; // 4.92e-3
-  lambda    = cam.lambda;   // [m]
-  pixsize   = cam.pixSize;     // [arcsec]
-  nmodesmax = 100;
-
-  opp = opra(psfNcpa(,,-:1:1),[0],lambda,pixsize,tel.diam,nmodes=nmodesmax,use_mode=modes, \
-             noise=0.0,cobs=tel.obs,progressive=0,first_nofit_astig=1,fix_kern=0,fix_pix=1, \
-  niter=10,fix_defoc=1,dpi=140,gui=0,nm=1);
-
-/*
-  //grabbing the PSF
-  N = cam.nPixelsCropped;
-  OTF_ncpa = getOTFncpa(N,procDir,SR_bench,psfNcpa,disp=disp);
-
-  // .... GEOMETRY 
-
-  //Defining the pupil
-  x       = (indgen(N) -N/2)(,-:1:N);
-  pixSize = tel.pixSize*(tel.nPixels/N);
-  x       *= pixSize/(tel.diam/2.);
-  y        = transpose(x);
-  P        = circularPupFunction(x,y,tel.obs);
-
-  // defining the polar corrdinates
-  tmp   = polarFromCartesian(x,y);
-  rho   = tmp(,,1);
-  theta = tmp(,,2);
-
+  //centering images
+  for(i=1;i<=nim;i++){
+    tmp = roll(fft(fft(roll(imCent(,,i))).re).re);
+    imCent(,,i) = tmp;
+  }
+  imCent /= max(imCent);
   
-  //phase diversity
+  
+  require,"/home/omartin/CANARY/Algorithms/OPRA/opra.i";
+  
+  lambda    = str2flt(readFitsKey(path,"FILTER"))*1e-9;
+  pixsize   = 0.03;//cam.pixSize;     // [arcsec]
+  nmodesmax = 120;
+  focstep   = 2*pi*100e-9/lambda; // 100 nm of focus on Xenics
+  allfocs   = [0,-1,1,-2,2]*focstep;
+ 
+  opp = opra(imCent,allfocs,lambda,pixsize,tel.diam,nmodes=nmodesmax,use_mode=modes, cobs=tel.obs,first_nofit_astig=0,fix_cobs=1,fix_pix=1, fix_defoc = 1,niter=100,gui=1,nm=1);
 
-  input    = array(pointer,2);
-  input(1) = &[nlow,N,pixSize];
-  input(2) = &[P,rho,theta];
-  a    = array(.1,nm);
-
-  //Levenberg-Marquardt Iterative fitting
-  res  = lmfit(psfModel,input,a,psfNcpa,eps=1e-3,verb=verb);
-
-  return psfModel(input,a);
-*/
+  coefs = *(*opp.coefs(1))(1);//in rd
+  mod = *opp.modes;
+  
+  coefs_nm = coefs*lambda*1e9/2./pi;
+  sigNcpa  = sqrt(sum(coefs_nm^2));
+  
+  writefits,"fitsFiles/ncpaCalibCoefs.fits",coefs;
+  writefits,"fitsFiles/ncpaCalibModes.fits",mod;
+    
+  return coefs;
 }
 
 func psfModel(input,a)
@@ -283,3 +271,37 @@ func psfModel(input,a)
 
   return roll(psf);
 }
+
+
+/*
+  //grabbing the PSF
+  N = cam.nPixelsCropped;
+  OTF_ncpa = getOTFncpa(N,procDir,SR_bench,psfNcpa,disp=disp);
+
+  // .... GEOMETRY 
+
+  //Defining the pupil
+  x       = (indgen(N) -N/2)(,-:1:N);
+  pixSize = tel.pixSize*(tel.nPixels/N);
+  x       *= pixSize/(tel.diam/2.);
+  y        = transpose(x);
+  P        = circularPupFunction(x,y,tel.obs);
+
+  // defining the polar corrdinates
+  tmp   = polarFromCartesian(x,y);
+  rho   = tmp(,,1);
+  theta = tmp(,,2);
+
+  
+  //phase diversity
+
+  input    = array(pointer,2);
+  input(1) = &[nlow,N,pixSize];
+  input(2) = &[P,rho,theta];
+  a    = array(.1,nm);
+
+  //Levenberg-Marquardt Iterative fitting
+  res  = lmfit(psfModel,input,a,psfNcpa,eps=1e-3,verb=verb);
+
+  return psfModel(input,a);
+*/

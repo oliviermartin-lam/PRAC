@@ -73,11 +73,12 @@ func computePSDbandwidth(k,Fe,tret,gain,BP,northo,mode=,verb=)
 }
 
 
-func computeOTFfitting(geometry,SR_ncpa,power,verb=)
+func computeOTFfitting(geometry,verb=)
 /* DOCUMENT
  */
 {
   r0tot = atm.r0*(cam.lambda/atm.lambda)^1.2;
+
   N = tel.nPixels;
 
   if( geometry == "circle" ) {
@@ -100,10 +101,6 @@ func computeOTFfitting(geometry,SR_ncpa,power,verb=)
     //filling the PSD
     PSD_fit = computeWienerSpectrum(k, tel.nPixels);
     PSD_fit(ndm) = 0.0;
-
-    //.... Adding ncpa with a f^-2 spectrum
-
-    PSD_fit  += computeNcpaPsd(N,tel.fourierPixSize,dm.pitch,SR_ncpa,power,cam.lambda);
 
     //computing the phase structure function
     PSD_fit(N/2+1,N/2+1) = 0.0;
