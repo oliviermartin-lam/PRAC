@@ -1,0 +1,143 @@
+/*
+ ____   ___  _   _ ____   ____ _____ ____  
+/ ___| / _ \| | | |  _ \ / ___| ____/ ___| 
+\___ \| | | | | | | |_) | |   |  _| \___ \ 
+ ___) | |_| | |_| |  _ <| |___| |___ ___) |
+|____/ \___/ \___/|_| \_\\____|_____|____/ 
+                                           
+*/
+
+ ast.nOffAxisSources = 3.
+ ast.magnitude.R = [10,10,10];
+ ast.photometry  = 1.66e-6;
+ wfs.x = [-16.2635,16.2635,-16.2635,16.2635,-43.4014,-33.3075,46.3348,0];
+ wfs.y = [16.2635,16.2635,-16.2635,-16.2635,-29.2985,24.7061,-11.6072,0];
+
+/*
+ _____ _____ _     _____ ____   ____ ___  ____  _____ 
+|_   _| ____| |   | ____/ ___| / ___/ _ \|  _ \| ____|
+  | | |  _| | |   |  _| \___ \| |  | | | | |_) |  _|  
+  | | | |___| |___| |___ ___) | |__| |_| |  __/| |___ 
+  |_| |_____|_____|_____|____/ \____\___/|_|   |_____|
+                                                      
+*/
+
+ tel.diam    = 4.2;
+ tel.obs     = 0.285;
+ tel.airmass = 1.;
+ tel.zenith  = acos(1./tel.airmass)*180/pi;  
+ tel.azimuth = 0;
+
+ // number of pixels in the images of phase spectrum (Wfit, Waniso, ...)
+ nLenslet = 7;
+ tel.pitch =  tel.diam / nLenslet;
+ tel.nPixels = 128;
+ tel.pixSize = 0.03;
+ // field of View in meters
+ tel.foV = tel.nPixels*tel.pixSize;
+ //actuator pitch in nPixels in forcing dm.dactu as a tel.pixSize multiple
+ tel.pitchSize = tel.pitch / tel.pixSize; 
+ // pixel size in the Fourier domain
+ tel.fourierPixSize = 1./tel.foV;
+ tel.lambdaPerFov = tel.fourierPixSize * ast.photometry * radian2arcsec; 
+ tel.dPerFov  = tel.fourierPixSize * tel.diam;
+ tel.airyPeak = (pi/4)*(1 - tel.obs^2) * cam.dPixSizeOnLambda^2;
+ tel.aera     = tel.diam^2*(1-tel.obs^2)*pi/4;
+ tel.aeraInPix= tel.aera / tel.pixSize^2;
+
+/*
+__        _______ ____  
+\ \      / /  ___/ ___| 
+ \ \ /\ / /| |_  \___ \ 
+  \ V  V / |  _|  ___) |
+   \_/\_/  |_|   |____/ 
+
+*/
+  nWfs = 8;
+  wfs.nValidMeas(1:nwfs)  = 72;
+  wfs.nValidSubAp(1:nwfs) = wfs.nValidMeas/2;
+  wfs.nLenslet(1:nwfs)    = 7;
+  wfs.type(1:nwfs)        = [2,2,2,2,1,1,1,1];
+  wfs.nPixels(1:nwfs)     = 16;
+  wfs(i).pixSize	  = 0.025;
+  wfs.sym(1:nwfs)         = 1;
+
+  
+  //...... Managing LGS ......//
+  indLgs = where(wfs.type==2);
+  nLgsWfs = numberof(indLgs);
+
+  if(is_array(indLgs)){
+     wfs(indLgs).lgsH = str2flt(tmp);
+     wfs(indLgs).lgsRadius = 23;
+     wfs(indLgs).lgsdH = 1000.;
+     wfs(indLgs).lgsAngle = 0.0;
+      
+     // making a square of right diameter : SCIMEASURE CAMERA
+     X = [-1,1,-1,1] * wfs(indLgs).lgsRadius/sqrt(2);
+     Y = [1,1,-1,-1] * wfs(indLgs).lgsRadius/sqrt(2);
+     // rotating the square
+     th = wfs(indLgs(1)).lgsAngle * pi/180;
+     rotMatrix = [[cos(th),sin(th)],[-sin(th),cos(th)]];
+     tmp = rotMatrix(,+)*[X,Y](,+);
+     X = tmp(1,);
+     Y = tmp(2,);
+    
+     wfs(indLgs).x = X(1:numberof(indLgs));
+     wfs(indLgs).y = Y(1:numberof(indLgs));
+   } 
+  
+
+/*
+ ____ _____ ____ 
+|  _ \_   _/ ___|
+| |_) || || |    
+|  _ < | || |___ 
+|_| \_\|_| \____|
+                 
+*/
+  rtc.nWfs     = nWfs;
+  rtc.its      = rtc.nWfs;
+  rtc.loopGain = 1.
+  rtc.BP       = 10e3;
+  rtc.Fe       = 150.; 
+  rtc.delay    = 0.003;    // loop delay in seconds
+  rtc.frameDelay = rtc.delay*rtc.Fe + 1.05;
+  rtc.obsMode = "MOAO";
+
+  rtc.ptrListOffAxisNgs = [5,6,7];
+  rtc.ptrListLgs = [1,2,3,4];
+  rtc.nLgsWfs    = numberof(rtc.ptrListLgs);
+  rtc.nNgsWfs    = numberof(rtc.ptrListOffAxisNgs)+1;
+
+/*
+    _  _____ __  __  ___  ____  ____  _   _ _____ ____  _____ 
+   / \|_   _|  \/  |/ _ \/ ___||  _ \| | | | ____|  _ \| ____|
+  / _ \ | | | |\/| | | | \___ \| |_) | |_| |  _| | |_) |  _|  
+ / ___ \| | | |  | | |_| |___) |  __/|  _  | |___|  _ <| |___ 
+/_/   \_\_| |_|  |_|\___/|____/|_|   |_| |_|_____|_| \_\_____|
+
+*/
+  atm.r0 = 0.15;	
+  atm.L0 = 10.;
+  atm.v =  10.;
+  atm.cnh      = atm.r0^(-5/3.) * [65,10,15,10]/100.;
+  atm.altitude = [0.,4.,10.,15.]*1e3;
+  atm.l0h      = [10.,10.,10.,10.];
+  atm.vh       = [8.,12.,15.,18.];
+
+/*
+ ______   ______ _____ _____ __  __ 
+/ ___\ \ / / ___|_   _| ____|  \/  |
+\___ \\ V /\___ \ | | |  _| | |\/| |
+ ___) || |  ___) || | | |___| |  | |
+|____/ |_| |____/ |_| |_____|_|  |_|
+                                    
+*/
+  nwfs = rtc.nwfs;
+  sys.tracking = [0.,0.,0.];
+  sys.xshift = array(0.,nwfs);
+  sys.yshift = array(0.,nwfs);
+  sys.theta  = array(0.,nwfs); 
+  sys.magnification = array(1.,nwfs);
+  sys.centroidGain = array(1.,nwfs);
