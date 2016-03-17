@@ -172,8 +172,10 @@ struct covmatrix_struct{
   pointer aliasing;
   pointer parallel;
   pointer noise;
+  pointer noiseCL;
   pointer tracking;
   pointer R;
+  pointer atm;
 };
 
 struct budget_struct{
@@ -208,6 +210,7 @@ struct otf_struct{
   pointer ts_cropped;
   pointer sky;
   pointer res;
+  pointer tilt;
 };
 
 struct psf_struct{
@@ -215,6 +218,9 @@ struct psf_struct{
   pointer res;
   pointer diff;
   pointer ncpa;
+  pointer ncpa_fit;
+  double  skyMoffatProf(3);
+  double  resMoffatProf(3);
   pointer EE_res;
   pointer EE_sky;
   double  SR_res;
@@ -224,8 +230,12 @@ struct psf_struct{
   double  SR_fit;
   double  SR_stats;
   double  SR_ncpa;
-  double  diffSum;
+  double  SR_tilt;
+  double  diffAvg;
   double  diffRms;
+  double  chi2;
+  double  skyWings;
+  double  resWings;
   double  FWHM_res;
   double  FWHM_sky;
   

@@ -768,7 +768,7 @@ func getPsfFwhm(im,pixSize,&a,fit=)
     res = lmfit(moffat,r,a,im,fit=[1,2,3]);
 
     fwhm  = 2*a(2)*sqrt(2^(1./a(3)) -1.);
-    
+
     return fwhm*pixSize;
     
   }else{
@@ -824,7 +824,7 @@ func moffat(r,a)
   alpha = a(2);
   beta  = a(3);
   
-  return I0*(1. + r*r/(alpha*alpha))^(-beta); 
+  return I0*(1. + (r/alpha)^2)^(-beta); 
 
 }
 /*
@@ -879,4 +879,35 @@ func var2sr(WFE,lambda)
 func sr2var(SR,lambda)
 {
   return sqrt(-log(SR))*lambda*1e9/2/pi;
+}
+
+
+func getWingsEnergy(im,alpha,pixSize,lambda,D)
+/* DOCUMENT
+
+ */
+{
+  N = dimsof(im)(0);
+  // Computes the energy in the wings
+  x        = (indgen(N) - N/2-1) * pixSize;
+  x        = x(,-:1:N);
+  y        = transpose(x);
+  r        = abs(x,y);
+
+  if(is_scalar(alpha)){
+    msk    = r > alpha*radian2arcsec*lambda/D;
+    E      = 100.* sum(im*msk)/sum(im);
+  }else{
+
+    n      = numberof(alpha);
+    E      = array(0.,n);
+    
+    for(i=1;i<=n;i++){
+      msk  = r > alpha(i)*radian2arcsec*lambda/D;
+      E(i) = 100.* sum(im*msk)/sum(im);
+    }
+    
+  }
+
+  return E;
 }

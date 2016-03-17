@@ -78,7 +78,7 @@ if(rtc.obsMode == "MOAO"){
   sigStatic = 0;
   if(rtc.obsMode == "MOAO"){
     sigStatic_full = computesStatic(*rtc.slopes_res,full=1);//in nm rms
-    sigStatic = sqrt(sum(sigStatic_full(3:)^2));
+    sigStatic = sqrt(sum(sigStatic_full^2));
   }
   budget.static = sigStatic;
   
@@ -198,7 +198,7 @@ func computesBandwidthError(dataset, obsmode,nho=,full=)
   //derives noise and Zernike basis
   units = 0.5*(tel.diam)*1e9/radian2arcsec;
   data_z = mrz(,+) * dataset(+,) * units;
-    
+
   //Temporal dsp of the Zernike modes of the noise
   dspdata_z = fft(data_z ,[0,1]);
 
@@ -251,7 +251,7 @@ func computesFittingError(Dpup,rzero,lambda)
  \____|\___/      |_| \___/      |_____|_| \_\_| \_\\___/|_| \_\
                                                                 
   */
-func computesOLError(dataset,R,pix=,lib=)
+func computesOLError(dataset,R)
 /*DOCUMENT
  */
 {
@@ -263,9 +263,9 @@ func computesOLError(dataset,R,pix=,lib=)
   //Derives on Zernike
   TSest_z = mrz(,+)*TSest(+,) *units;
   //takes variance of the tip-tilt wavefront only
-  sigma_TT = sqrt(sum(TSest_z(3:,rms)^2));
-  //Determines OL error in taking 5% of the wavefront error on high order only
-  sigOL = 0.05*sigma_TT;
+  sigma_WF = sqrt(sum(TSest_z(,rms)^2));
+  //Determines OL error in taking 5% of the wavefront error
+  sigOL = 0.05*sigma_WF;
 
   return sigOL;
 

@@ -186,8 +186,8 @@ func getOTFncpa(nPixels,procDir,&SR_bench,&PSF_ncpa,disp=)
 }
 
 
-func ncpaPhaseDiversity(modes,&sigNcpa)
-/* DOCUMENT a = ncpaPhaseDiversity("zernike",s)
+func ncpaPhaseDiversity(modes,&sigNcpa,&SR_ncpa,&psfNcpa,&psfNcpa_fit)
+/* DOCUMENT a = ncpaPhaseDiversity("zernike",sigNcpa,SR_ncpa,psfNcpa,psfNcpa_fit)
 
  */
 {
@@ -197,33 +197,57 @@ func ncpaPhaseDiversity(modes,&sigNcpa)
   N      = dimsof(imCube)(2);
   nim    = dimsof(imCube)(0);
   imCent = imCube(N/2-24:N/2+25,N/2-24:N/2+25,);
-
+  tmp         = imCent(,,3);
+  imCent(,,3) = imCent(,,1);
+  imCent(,,1) = imCent(,,2);
+  imCent(,,2) = tmp;
+  
   //centering images
   for(i=1;i<=nim;i++){
     tmp = roll(fft(fft(roll(imCent(,,i))).re).re);
-    imCent(,,i) = tmp;
+    imCent(,,i) = tmp/numberof(tmp);
   }
-  imCent /= max(imCent);
-  
-  
+
+  psfNcpa = imCent(,,3); 
+   
   require,"/home/omartin/CANARY/Algorithms/OPRA/opra.i";
   
   lambda    = str2flt(readFitsKey(path,"FILTER"))*1e-9;
+  obs       = str2flt(readFitsKey(path,"TELOBS"));
+  D         = str2flt(readFitsKey(path,"TELDIAM"));
   pixsize   = 0.03;//cam.pixSize;     // [arcsec]
-  nmodesmax = 120;
+  nmodesmax = 200;
   focstep   = 2*pi*100e-9/lambda; // 100 nm of focus on Xenics
-  allfocs   = [0,-1,1,-2,2]*focstep;
+  allfocs   = [1,-1,0,2,-2]*focstep;
  
-  opp = opra(imCent,allfocs,lambda,pixsize,tel.diam,nmodes=nmodesmax,use_mode=modes, cobs=tel.obs,first_nofit_astig=0,fix_cobs=1,fix_pix=1, fix_defoc = 1,niter=100,gui=1,nm=1);
+  opp = opra(imCent,allfocs,lambda,pixsize,D,cobs=obs,nmodes=nmodesmax,use_mode=modes,first_nofit_astig=0,fix_cobs=0,fix_pix=0,fix_defoc = 0,fix_amp=0,fix_kern=0,niter=100,gui=1,nm=1,progressive=1);
 
   coefs = *(*opp.coefs(1))(1);//in rd
   mod = *opp.modes;
   
   coefs_nm = coefs*lambda*1e9/2./pi;
-  sigNcpa  = sqrt(sum(coefs_nm^2));
+
+  // Grabbing SR and Variance on residual phase
+  pha = opp.phase(,,1) * 0.;
+  phhf = opp.phase(,,1) * 0.;
+  for (i=4;i<=nmodesmax;i++) {
+    pha += coefs(i) * mod(,,i);
+    if(i>=36){
+      phhf += coefs(i) * mod(,,i);
+    }
+  }
+
+  //determining the fitted psf
+  P = opp.pupi;
+  psfNcpa_fit = roll(abs(fft(roll(P*exp(1i*pha))))^2)/numberof(pha);
+  psfHfNcpa_fit = roll(abs(fft(roll(P*exp(1i*phhf))))^2)/numberof(phhf);
   
-  writefits,"fitsFiles/ncpaCalibCoefs.fits",coefs;
-  writefits,"fitsFiles/ncpaCalibModes.fits",mod;
+  phase_rms = pha(where(opp.pupi))(rms);
+  SR_ncpa = exp(-phase_rms^2.);
+  sigNcpa  = phase_rms * lambda*1e9/2./pi;
+  
+  writefits,"fitsFiles/ncpaCalibCoefs_"+var2str(nmodesmax)+".fits",coefs;
+  writefits,"fitsFiles/ncpaCalibModes_"+var2str(nmodesmax)+".fits",mod;
     
   return coefs;
 }

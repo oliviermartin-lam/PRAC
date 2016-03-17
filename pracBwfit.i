@@ -57,14 +57,15 @@ func computePSDbandwidth(k,Fe,tret,gain,BP,northo,mode=,verb=)
     }else if(mode == "SCAO"){
       hcor = hcorScao(nu_l, Fe, tret, gain, BP);
     }
-    PSD_bw +=  abs(hcor) * 0.023 * cnh(l) * (k^2 + 1./l0h(l)^2.)^(-11/6.);
+    PSD_bw +=  abs(hcor)^2 * 0.023 * cnh(l) * (k^2 + 1./l0h(l)^2.)^(-11/6.);
   }
-
+  /*
   if(mode == "SCAO"){
-    nu = .5*k * atm.v/sqrt(2);
+    nu = k * atm.v/sqrt(2);
     hcor = hcorScao(nu, Fe, tret, gain, BP);
-    PSD_bw = abs(hcor) * computeGlobalWienerSpectrum(k, N, r0tot, atm.L0);
+    PSD_bw = abs(hcor)^2 * computeGlobalWienerSpectrum(k, N, r0tot, atm.L0);
   }
+  */
   
   PSD_bw(N/2+1,N/2+1) = 0;  
   PSD_bw(northo) = 0.00;
@@ -72,6 +73,48 @@ func computePSDbandwidth(k,Fe,tret,gain,BP,northo,mode=,verb=)
   return PSD_bw;
 }
 
+func computeOTFtiptilt(dataset,kern,&Dtt)
+/* DOCUMENT Wbp = computeBpSpectrum(k,V,dir,Fe,tret,gain,Wiener,northo)
+     
+   Bandwidth error. We use the transfer function of the system,
+   defined by a sampling frequency and delay, assuming a pure
+   close-loop integrator. The attenuation of the transfer function
+   Hcor(nu) is applied on all spatial frequency k=nu/V (units equation
+   is m^-1 = s^-1 / (m/s) ).
+
+   SEE ALSO:
+ */
+{
+  if(!is_void(dataset)){
+    //Get tip-tilt variance
+    mrz   = *sys.slopesToZernikeMatrix;
+    units = 2*pi*arcsec2radian/cam.lambda;
+    s     = dataset(slrange(rtc.its),)*units;
+    s    -= s(,avg);
+    zern  = mrz(,+)*s(+,);
+    // determine the variance in radian
+    sig11 = avg(zern(1,)^2);
+    sig22 = avg(zern(2,)^2);
+    sig12 = avg(zern(1,)* zern(2,));
+  }else{
+    sig11 = kern(1);
+    sig22 = kern(2);
+    sig12 = kern(3);
+
+  }
+  //calculatng the phase structure function;
+  N     = tel.nPixels;
+  coeff = 16*tel.pixSize/(tel.diam)^2;
+  x     = (indgen(N) - N/2)(,-:1:N) * coeff;
+  y     = transpose(x);
+  
+  Dtt   = (sig11^2*y^2 + sig22^2*x^2 + 2*sig12*x*y);
+
+  //Computing the OTF
+  OTF_tt = exp(-0.5*Dtt);
+
+  return OTF_tt;
+}
 
 func computeOTFfitting(geometry,verb=)
 /* DOCUMENT
@@ -223,9 +266,10 @@ func computeWienerSpectrum(k,N)
 
 func filteringNoiseFactor(g,delay,obsmode)
 {
+  return g/(2-g);
   if(g==0) return 0;
   if(obsmode =="MOAO"){
-    return g*(1-2*g*delay*(1-delay))/(2.-g);
+    return g/(2-g);//g*(1-2*g*delay*(1-delay))/(2.-g);
   }else if(obsmode == "SCAO"){
     return g*g/(g*(1-delay)*(2 - g*(1-delay) + 2*g*delay*(1-g*(1-delay))^2/(1+g*delay) - (g*delay)^2 ));
   }

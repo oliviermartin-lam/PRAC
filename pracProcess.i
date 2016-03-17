@@ -1,5 +1,171 @@
 include, "pracMain.i";
 
+//00h14
+// r0              = 18.4 cm
+// L0              = 9.45 m
+// v               = 8.84 m/s
+// Sky  Strehl     = 29.9 %
+// TS   Strehl     = 29.6 %
+// Est. Strehl     = 31 %
+// RTC  Strehl     = 31.6 %
+// Sky  FWHM       = 90.17 mas
+// TS   FWHM       = 88.75 mas
+// Est. FWHM       = 90.44 mas
+// RTC  FWHM       = 90.32 mas
+// TS   Chi2       = 3.295
+// Est. Chi2       = 3.252
+// RTC  Chi2       = 3.446
+// Sky  Mof. prof. = [0.321, 1.73, 1.22]
+// TS   Mof. prof. = [0.336, 1.82, 1.35]
+// Est. Mof. prof. = [0.352, 2.09, 1.64]
+// RTC  Mof. prof. = [0.358, 2.16, 1.73]
+
+//00h15
+// r0              = 20.1 cm
+// L0              = 8.99 m
+// v               = 6.12 m/s
+// Sky  Strehl     = 24 %
+// TS   Strehl     = 22.5 %
+// Est. Strehl     = 22.4 %
+// RTC  Strehl     = 21.1 %
+// Sky  FWHM       = 106.6 mas
+// TS   FWHM       = 100.3 mas
+// Est. FWHM       = 98.54 mas
+// RTC  FWHM       = 101.1 mas
+// TS   Chi2       = 1.824
+// Est. Chi2       = 1.74
+// RTC  Chi2       = 1.808
+// Sky  Mof. prof. = [0.247, 2.06, 1.24]
+// TS   Mof. prof. = [0.246, 1.85, 1.15]
+// Est. Mof. prof. = [0.247, 1.81, 1.14]
+// RTC  Mof. prof. = [0.23, 1.82, 1.11]
+
+//00h16
+// r0              = 16.3 cm
+// L0              = 8.14 m
+// v               = 7.26 m/s
+// Sky  Strehl     = 16.7 %
+// TS   Strehl     = 15.7 %
+// Est. Strehl     = 14.4 %
+// RTC  Strehl     = 15.6 %
+// Sky  FWHM       = 128.1 mas
+// TS   FWHM       = 115.3 mas
+// Est. FWHM       = 117.3 mas
+// RTC  FWHM       = 112.4 mas
+// TS   Chi2       = 1.344
+// Est. Chi2       = 1.374
+// RTC  Chi2       = 1.351
+// Sky  Mof. prof. = [0.17, 2.43, 1.2]
+// TS   Mof. prof. = [0.164, 1.99, 1.04]
+// Est. Mof. prof. = [0.151, 1.99, 1.01]
+// RTC  Mof. prof. = [0.165, 1.92, 1.03]
+                   
+  
+func comparePSFRmethods(timedata,Dir=,disp=)
+/* DOCUMENT comparePSFRmethods,timedata,Dir="2013_09_13_onsky/"
+
+ */
+{
+  res_ts  = pracMain(timedata,Dir=Dir,psfrMethod="ts",disp=disp);
+  res_est = pracMain(timedata,Dir=Dir,psfrMethod="estimation",disp=disp);
+  res_rtc = pracMain(timedata,Dir=Dir,psfrMethod="rtc",disp=disp);
+
+  EEsky  = (*res_ts(7))(,1);
+  EEts   = (*res_ts(7))(,2);
+  EEest  = (*res_est(7))(,2);
+  EErtc  = (*res_rtc(7))(,2);
+
+ 
+  // Relative Error on EE
+  
+  winkill,10;window,10,dpi=90,style="aanda.gs";
+  logxy,1,0;gridxy,1,1;
+  boxwidth = 1e3*span(1,cam.nPixelsCropped-3.,cam.nPixelsCropped) * cam.pixSize;
+  plg, 100*(EEts-EEsky)/EEsky,boxwidth;
+  plg, 100*(EEest-EEsky)/EEsky,boxwidth,color = [128,128,128];
+  plg, 100*(EErtc-EEsky)/EEsky,boxwidth,color = [100,100,100];
+  xytitles,"Integrated box width (mas)","Total EE error (%)";
+  plt,"A: TS-based  PSF",.5e3,-5,tosys=1;
+  plt,"B: Estimated PSF",.5e3,-6,tosys=1,color = [128,128,128];
+  plt,"C: RTC-based PSF",.5e3,-7,tosys=1,color = [100,100,100];
+  pltitle,rtc.aoMode + " at " + timedata;
+  pdf,"results/EEerror_" + timedata;
+
+
+  // Absolute Error on OTF
+  
+  os   = (*res_ts(8))(,,1);
+  ots  = (*res_ts(8))(,,2);
+  oest = (*res_est(8))(,,2);
+  ortc = (*res_rtc(8))(,,2);
+   
+  os_avg   = circularAveragePsf(os);os_avg/=max(os_avg);
+  ots_avg  = circularAveragePsf(ots);ots_avg/=max(ots_avg);
+  oest_avg = circularAveragePsf(oest);oest_avg/=max(oest_avg);
+  ortc_avg = circularAveragePsf(ortc);ortc_avg/=max(ortc_avg);
+
+  ots_err  = ots_avg  - os_avg;
+  oest_err = oest_avg - os_avg;
+  ortc_err = ortc_avg - os_avg;
+  
+  winkill,11;window,11,style="aanda.gs",dpi=90;clr;
+  dl =  (indgen(cam.nPixelsCropped/2) * tel.foV/tel.nPixels);
+  n = numberof(dl);gridxy,1,1;
+  plg, ots_err(1:n/2+5),dl(1:n/2+5);
+  plg, oest_err(1:n/2+5),dl(1:n/2+5);
+  plg, ortc_err(1:n/2+5),dl(1:n/2+5);
+  xytitles,"!r/D","Absolute OTF error ";
+  plt,"A: TS-based  OTF",.5,-.03,tosys=1;
+  plt,"B: Estimated OTF",.5,-.04,tosys=1,color = [128,128,128];
+  plt,"C: RTC-based OTF",.5,-.05,tosys=1,color = [100,100,100];
+  pltitle,rtc.aoMode + " at " + timedata;
+  
+  pdf,"results/OTFerror_" + timedata;
+  
+  // Scalar results on performance
+
+  write,format="r0              = %.3g cm\n", 100*(*res_ts(2))(1);
+  write,format="L0              = %.3g m\n", (*res_ts(2))(2);
+  write,format="v               = %.3g m/s\n", (*res_ts(2))(3);
+  
+  write,format="Sky  Strehl     = %.3g%s\n", 100.*(*res_ts(11))(1)," %";
+  write,format="TS   Strehl     = %.3g%s\n", 100.*(*res_ts(11))(2)," %";
+  write,format="Est. Strehl     = %.3g%s\n", 100.*(*res_est(11))(2)," %";
+  write,format="RTC  Strehl     = %.3g%s\n", 100.*(*res_rtc(11))(2)," %";
+
+  write,format="Sky  FWHM       = %.4g mas\n", 1e3*(*res_ts(11))(11);
+  write,format="TS   FWHM       = %.4g mas\n", 1e3*(*res_ts(11))(12);
+  write,format="Est. FWHM       = %.4g mas\n", 1e3*(*res_est(11))(12);
+  write,format="RTC  FWHM       = %.4g mas\n", 1e3*(*res_rtc(11))(12);
+
+  write,format="TS   Chi2       = %.4g\n", (*res_ts(11))(13);
+  write,format="Est. Chi2       = %.4g\n", (*res_est(11))(13);
+  write,format="RTC  Chi2       = %.4g\n", (*res_rtc(11))(13);
+
+  write,format="Sky  Mof. prof. = [%.3g, %.3g, %.3g]\n",(*res_ts(12))(1,1),(*res_ts(12))(2,1),(*res_ts(12))(3,1);
+  write,format="TS   Mof. prof. = [%.3g, %.3g, %.3g]\n", (*res_ts(12))(1,2),(*res_ts(12))(2,2),(*res_ts(12))(3,2);
+  write,format="Est. Mof. prof. = [%.3g, %.3g, %.3g]\n",(*res_est(12))(1,2),(*res_est(12))(2,2),(*res_est(12))(3,2);
+  write,format="RTC  Mof. prof. = [%.3g, %.3g, %.3g]\n", (*res_rtc(12))(1,2),(*res_rtc(12))(2,2),(*res_rtc(12))(3,2);
+
+  // Moffat profile
+  winkill,12;window,12,style="aanda.gs",dpi=90;clr;
+  gridxy,1,1;
+  y1  = (*res_ts(12))(,1);
+  y2  = (*res_ts(12))(,2);
+  y3  = (*res_est(12))(,2);
+  y4  = (*res_rtc(12))(,2);
+  tab = [y1,y2,y3,y4];
+  multiBarDiagram,tab,["I_0","!a","!b"];
+  xytitles," ","Moffat parameters";
+  plt,"Sky PSF",.2,max(tab),tosys=1,color=[192,192,192];
+  plt,"TS-based PSF",.2,max(tab)*.9,tosys=1,color=[128,128,128];
+  plt,"Estimated PSF",.2,max(tab)*.8,tosys=1,color=[96,96,96];
+  plt,"RTC-based PSF",.2,max(tab)*.7,tosys=1,color=[64,64,64];
+  pltitle,rtc.aoMode + " at " + timedata;
+  pdf,"results/Moffat_" + timedata;
+
+}
+ 
 /*
  __  __    _    ____ ____ _____     _______ 
 |  \/  |  / \  / ___/ ___|_ _\ \   / / ____|
@@ -160,6 +326,8 @@ func statisticsOnFWHM(method,aomode,all=)
 
     if(mode == aomode || all == 1){
       obsmode = grow(obsmode,mode);
+      //FWHM_sky = grow(FWHM_sky,(*p(11))(14));
+      //FWHM_res = grow(FWHM_res,(*p(11))(13)) ;
       //grabbing PSFs
       ps = (*p(6))(,,1);
       pr = (*p(6))(,,2);
@@ -185,7 +353,7 @@ func statisticsOnFWHM(method,aomode,all=)
   //mode = sortLabel(obsmode);
   mode = ["SCAO","MOAO4L3N","MOAO3N","MOAO4L3T","GLAO"];
   c  = ["black","red","blue","magenta","green"];
-  w = where(FWHM_sky < 200.  & FWHM_res < 200. & FWHM_sky>0 & FWHM_res > 0);
+  w = where(FWHM_sky < 120.  & FWHM_res < 120. & FWHM_sky>0 & FWHM_res > 0);
   FWHM_res = FWHM_res(w);
   FWHM_sky = FWHM_sky(w);
   obsmode  = obsmode(w);
@@ -884,16 +1052,120 @@ func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
 
   
 
-
 /*
- ____  ____  _____     ____  
-|  _ \/ ___||  ___|   |  _ \ 
-| |_) \___ \| |_ _____| |_) |
-|  __/ ___) |  _|_____|  _ < 
-|_|   |____/|_|       |_| \_\
-                             
+ ____  _  ____   __
+/ ___|| |/ /\ \ / /
+\___ \| ' /  \ V / 
+ ___) | . \   | |  
+|____/|_|\_\  |_|  
+                   
+ ____  _____ ____  _____ ___  ____  __  __    _    _   _  ____ _____ 
+|  _ \| ____|  _ \|  ___/ _ \|  _ \|  \/  |  / \  | \ | |/ ___| ____|
+| |_) |  _| | |_) | |_ | | | | |_) | |\/| | / _ \ |  \| | |   |  _|  
+|  __/| |___|  _ <|  _|| |_| |  _ <| |  | |/ ___ \| |\  | |___| |___ 
+|_|   |_____|_| \_\_|   \___/|_| \_\_|  |_/_/   \_\_| \_|\____|_____|
+                                                                     
 */
 
 
+func skyPerformance(aomode,all=)
+/* DOCUMENT  skyPerformance,[],all=1;
+ */
+{
 
+  include,"pracConfig.i",1;
 
+  savingDir  = "results/pracResults/resultsWithls_Vii_Method/"
+  list       = listFile(savingDir);
+  nfile      = numberof(list);
+  pixSize    =  0.0297949;
+  nPixelsCropped = 128;
+  nPixels = 512;
+  lambda = 1.677e-6; 
+  foV        = nPixels * pixSize;
+  D          = 4.2;
+  dl =  indgen(nPixelsCropped/2) * foV/nPixels;
+  nn = where(dl>= 10*radian2arcsec*lambda/D)(1);
+  
+  obsmode = EE = SR = FWHM = seeing = [];
+  for(i=1;i<=nfile;i++){
+    //loading results
+    p = readfits(savingDir + list(i));
+    //grabbing aomode
+    mode = strchar(*p(1))(2);
+
+    if(mode == aomode || all == 1){
+      obsmode = grow(obsmode,mode);
+      //grabbing the Strehl ratios
+      SR   = grow(SR,(*p(11))(1));
+      ps   = (*p(6))(,,1);
+      FWHM = grow(FWHM,1e3*getPsfFwhm(ps,pixSize,fit=0));
+      EE   = grow(EE,(*p(7))(nn,1));
+      seeing = grow(seeing, 0.103/(*p(2))(1));
+      write,format="Files grabbed :%.3g%s\r",100.*i/nfile,"%";
+    }
+  }
+
+  //mode = sortLabel(obsmode);
+  mode = ["SCAO","MOAO4L3N","MOAO3N","MOAO4L3T","GLAO"];
+  c  = ["black","red","blue","magenta","green"];
+  
+
+  winkill,0;window,0,dpi=90,style="aanda.gs";
+  m =max(SR);
+  m2 =max(seeing);
+  for(j=1;j<=numberof(mode);j++){
+    if(mode(j) != "GLAO")
+      w = where(obsmode == mode(j));
+    else
+      w = where(strpart(obsmode,1:4) == mode(j));
+    
+    if(is_array(w)){
+      plmk, SR(w),seeing(w),marker = j,msize=.2,width = 10,color=c(j);
+      plt,mode(j),1.5,(1-j/10.)*m,color=c(j),tosys=1;
+    }
+  }
+  pdf,"results/statistics/skySR.pdf";
+  
+  xytitles,"Seeing at 500 nm(arcsec)", "Sky Strehl ratio in H";
+  limits,0,2;
+  range,-1,m*1.05;
+
+  winkill,1;window,1,dpi=90,style="aanda.gs";
+  m =max(FWHM);
+  for(j=1;j<=numberof(mode);j++){
+    if(mode(j) != "GLAO")
+      w = where(obsmode == mode(j));
+    else
+      w = where(strpart(obsmode,1:4) == mode(j));
+    
+    if(is_array(w)){
+      plmk, FWHM(w),seeing(w),marker = j,msize=.2,width = 10,color=c(j);
+      plt,mode(j),.1,(1-j/10.)*200,color=c(j),tosys=1;
+    }
+  }
+  
+  xytitles,"Seeing at 500 nm(arcsec)", "PSF FWHM in H";
+  pdf,"results/statistics/skyFWHM.pdf";
+  limits,0,2;
+  range,70,200;
+  
+   winkill,2;window,2,dpi=90,style="aanda.gs";
+  m =max(EE);
+  for(j=1;j<=numberof(mode);j++){
+    if(mode(j) != "GLAO")
+      w = where(obsmode == mode(j));
+    else
+      w = where(strpart(obsmode,1:4) == mode(j));
+    
+    if(is_array(w)){
+      plmk, EE(w),seeing(w),marker = j,msize=.2,width = 10,color=c(j);
+      plt,mode(j),.1,(1-j/10.)*m,color=c(j),tosys=1;
+    }
+  }
+  
+  xytitles,"Seeing at 500 nm(arcsec)","EE at 10!l/D (%)";
+  pdf,"results/statistics/skyEE.pdf";
+  limits,0,2;
+  range,0,100;
+}

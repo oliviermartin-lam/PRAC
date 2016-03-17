@@ -193,6 +193,34 @@ func cercle(r, center=, col=,width=, type=)
                       |___/                     
 */
 
+
+func multiBarDiagram(tab,labs)
+/* DOCUMENT
+
+ */
+{
+  ncase = 1;
+  nbar  = 1;
+  ns    = dimsof(tab);
+  if(ns(1) !=0){
+    nbar  = ns(2);
+  }
+  if(ns(1) >1){
+     ncase = ns(3);
+  }
+  thick = 2./(3*ncase);
+  col   = [[char(240)],[char(241)],[char(242)],[char(243)]];
+  
+  for(i=1;i<=nbar;i++){
+    for(j=1;j<=ncase;j++){
+      xj   = i - ncase*thick/2 + (2*j-1)/2. * thick;
+      plfp,[char(241+j)],[0,1,1,0]*tab(i,j),([1,1,1,1]*xj) + [-1,-1,1,1]*thick/2,[4];
+    }
+    plt,labs(i),i,max(tab)*1.05,tosys=1;
+  }
+  range,-.1,max(tab)*1.1;
+  limits,0,nbar+1;
+}
 func plotsBarDiagram(y,labs,y2=,y3=,thick=,col1=,col2=,col3=,title=,step=)
 /*DOCUMENT
  */
@@ -240,8 +268,6 @@ func plotsBarDiagram(y,labs,y2=,y3=,thick=,col1=,col2=,col3=,title=,step=)
   else{
     for(i=1; i<=nbar; i++){
       d = 0.5*(0.5-thick);
-      m(i) = max(y(i),y2(i));
-      n(i) = min(y(i),y2(i));
       plfp, col1,[0,1,1,0]*y(i),([1,1,1,1]*i*step-d) + [-1,-1,1,1]*thick,[4];
       plfp, col2,[0,1,1,0]*y2(i),([1,1,1,1]*i*step) + [-1,-1,1,1]*thick,[4];
       plfp, col3,[0,1,1,0]*y3(i),([1,1,1,1]*i*step+d) + [-1,-1,1,1]*thick,[4];
@@ -249,8 +275,9 @@ func plotsBarDiagram(y,labs,y2=,y3=,thick=,col1=,col2=,col3=,title=,step=)
       n(i) = min(y(i),y2(i),y3(i));
     }
   }
+  mm = max(m)*1.05;
   for(j=1;j<=nbar;j++){
-    plt,labs(j),j - thick-d,max(abs(m(j))*1.05,10),tosys=1;
+    plt,labs(j),j,max(m(j))*1.05 + 10,tosys=1;
   }
   
   limits,0,step*nbar+1;

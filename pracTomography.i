@@ -1,3 +1,27 @@
+func computeOTFtomographic(averageMode,&dphi,para=,Cee=,verb=)
+/*DOCUMENT computeOTFtomographic("Vii",dphi,para=,Cee=,verb=)
+
+  Returns the phase structure function (SF) average on the pupil from the tomographic error in rd^2. You have to specified the inputs mode as either "Uij" to average the  SF using Veran's method (1997), or "Vii" for using Gendron's method (2006) or "intersample" to use simplified Gendron's approach (2014 Kaust).
+  The covariance matrix of voltages Cvv must be given in volts^2.
+
+ */
+{
+
+  if(is_void(Cee))
+    Cee = computesCeeMatrix(rtc.obsMode,para=para,verb=verb);
+
+  //computes the covariance matrix of voltages in volts^2
+  Cvv = propagateError2Dm(Cee, *rtc.mc );
+  
+  //Computing the OTF
+  OTF_tomo = makeOTF(Cvv,dphi,averageMode=averageMode,verb=verb);
+
+  
+  return OTF_tomo;
+}
+
+
+
 /*
  _____                       __  __       _        _               
 | ____|_ __ _ __ ___  _ __  |  \/  | __ _| |_ _ __(_) ___ ___  ___ 

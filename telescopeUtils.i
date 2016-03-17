@@ -4,7 +4,7 @@ func circularPupFunction(D,obs,N,pixSize)
  */
 {
   //defining geometry
-  x     = (indgen(N) -N/2-1)(,-:1:N);
+  x     = (indgen(N) -N/2)(,-:1:N);
   x    *= pixSize/(D/2.);
   y     = transpose(x);
     
@@ -59,7 +59,7 @@ func circularAveragePsf(im)
   rmax = max(rho);
   
   // Initialisation
-  nt = 128;nr = N/2;//nr = 128;
+  nt = 32;nr = N/2;//nr = 128;
   imAvg = npx = array(0.,nr,nt);
  
   for(i=1;i<=nt;i++){
@@ -84,7 +84,8 @@ func circularAveragePsf(im)
     }
   }
 
-  imAvg = imAvg(,sum)/npx(,sum);
+  w     = where(npx(,sum) !=0);
+  imAvg = imAvg(w,sum)/npx(w,sum);
   
   return imAvg;
 }
@@ -108,124 +109,95 @@ func OTF_telescope(D,obs,nPixels,pixSize)
   return OTF_tel;
 }
 
-func computeOTFstatic(&PSF_stats)
+func computeOTFstatic(&PSF_stats,&PSF_ncpa_fit,&SR_stats,&SR_ncpa,&sigNcpa)
 {
 
   //defining geometry
   N     = tel.nPixels;
-  x     = (indgen(N) -N/2)(,-:1:N);
+  x     = (indgen(N) -N/2-1)(,-:1:N);
   x    *= tel.pixSize/(tel.diam/2.);
   y     = transpose(x);
 
-  old=1;
 
-  if(old){
-
-    //computes static aberrations in arcsec
-    stats  = (*rtc.slopes_res)(slrange(rtc.its),avg);
+  //computes static aberrations in arcsec
+  res = (*rtc.slopes_res)(slrange(rtc.its),);
+  stats  = res(,avg);
   
-    //computing the Zernike modes in radians
-    a  = (*sys.slopesToZernikeMatrix)(,+) * stats(+);
-    a  = grow(0.,a); // adding piston;
-    a *=  pi*tel.diam/(radian2arcsec*cam.lambda);
+  //computing the Zernike modes in radians
+  a  = (*sys.slopesToZernikeMatrix)(,+) * stats(+);
+  a  = grow(0.,a); // adding piston;
+  a *=  pi*tel.diam/(radian2arcsec*cam.lambda);
   
-    //Grabbing ncpa calib.
-    ancpa  = readfits("fitsFiles/ncpaCalibCoefs.fits"); //in rd
-    nmodes = numberof(ancpa);
-
-    //Generating and saving zernike modes
-    Zi = readfits("fitsFiles/zernikeModes.fits",err=1);
+  //Grabbing ncpa calib.
+  nmodesmax = 150;
+  ancpa  = readfits("fitsFiles/ncpaCalibCoefs_"+var2str(nmodesmax)+".fits"); //in rd
+  nmodes = numberof(ancpa);
+  mod    = readfits("fitsFiles/ncpaCalibModes_"+var2str(nmodesmax)+".fits"); //in rd
+  npx    = dimsof(mod)(2); 
     
-    if(is_void(Zi)){
-      tmp   = polarFromCartesian(x,y);
-      rho   = tmp(,,1);
-      theta = tmp(,,2);
-      Zi = array(0.0,N,N,nmodes);
-      for(i=1;i<=nmodes;i++){
-        Zi(,,i) = computeZernikePolynomials(rho,theta,i); // i=1 -> piston
-      }
-      writefits,"fitsFiles/zernikeModes.fits",Zi;
+  //Generating and saving zernike modes
+  Zi = readfits("fitsFiles/zernikeModes.fits",err=1);
+    
+  if(is_void(Zi)){
+    tmp   = polarFromCartesian(x,y);
+    rho   = tmp(,,1);
+    theta = tmp(,,2);
+    Zi = array(0.0,N,N,nmodes);
+    for(i=1;i<=nmodes;i++){
+      Zi(,,i) = computeZernikePolynomials(rho,theta,i); // i=1 -> piston
     }
+    writefits,"fitsFiles/zernikeModes.fits",Zi;
+  }
     
-    
-    //loop on Zernike modes
-    phi  = array(0.,N,N);
-    nmodes = 36;
-    for(i=2;i<=nmodes;i++){
-      if(i<=36){
-        phi += a(i) * Zi(,,i);
-      }else{
-        phi += 0*ancpa(i) * Zi(,,i);
-      }
-    }
 
-    //FTO of the telescope + abstats
-    P = circularPupFunction(tel.diam,tel.obs,N,tel.pixSize);
-    OTF_stats = autocorrelation(P*exp(1i*phi));
-
-    //normalization
-    OTF_stats /= tel.aeraInPix^2;
-
-    PSF_stats = fft(OTF_stats).re;
-    
-  }else{
-
-
-    stats  = (*rtc.slopes_res)(slrange(rtc.its),);
-    zer2rad = pi*tel.diam/(radian2arcsec*cam.lambda); 
-    Zi   = (readfits("fitsFiles/zernikeModes.fits",err=1))(,,1:36);
-    nzer = dimsof(Zi)(0);
-    
-    //constants
-    nframes = dimsof(stats)(0);
-    t       = int(cam.exposureTime*rtc.Fe);
-    nstep   = int(nframes/t);
-    a_stat_avg = array(0.,nzer,nstep+1);
-
-    // Loop on exposure time step
-    for(i = 1;i<=nstep+1;i++){
-      //kth exposition
-      if(i<=nstep)
-        tk = 1 + (i-1)*t:i*t;
-      else
-        tk = nstep*t:0;
-      //static modes: the slopes are average to get the static phase
-      stat_k = (stats(,tk))(,avg);
-      a_stat_k = (*sys.slopesToZernikeMatrix)(,+) * stat_k(+);
-      a_stat_avg(2:,i) = a_stat_k*zer2rad;
-    }
-
+  //loop on Zernike modes for TT
+  phi_tt  = array(0.,N,N);
+  for(i=2;i<=3;i++){
+    phi_tt += a(i) * Zi(,,i);
+  }
   
-    /////////////////////
-    // .... Determining the PSF
-    ////////////////////////////////////////////
-  
-    P  = circularPupFunction(tel.diam,tel.obs,tel.nPixels,tel.pixSize);
-    phi_res_k = PSF_stats = OTF_stats = 0*P;
-  
-    for(k=1;k<=nstep+1;k++){
-      phi_res_k *=0;
-      for(i=4;i<=nzer;i++){
-        phi_res_k += a_stat_avg(i,k) * Zi(,,i);
-      }
-    
-      //Electrical Field
-      E = roll(P*exp(1i*phi_res_k));
-      //PSF
-      //PSF_stats += abs(fft(E))^2;
-      OTF_stats += autocorrelation(E);
-      write,format="Job done:%.3g%s\r",100.*k/(nstep+1.),"%";
-    }
-    OTF_stats/=nstep+1.;
-    //OTF_stats = fft(PSF_stats).re;
+  //loop on Zernike modes for CPA
+  phi  = array(0.,N,N);
+  for(i=4;i<=36;i++){
+    phi += a(i) * Zi(,,i);
+  }
 
-    //normalization
-    OTF_stats /= tel.aeraInPix^2;
 
-    PSF_stats = fft(OTF_stats).re;
+  //loop on Zernike modes for NCPA
+  phi_n  = array(0.,npx,npx);
+  for(i=4;i<=nmodes;i++){
+    phi_n += ancpa(i) * mod(,,i);
   }
 
   
+  if(npx !=N){
+    //Interpolate NCPA phase
+    phi_ncpa = 0*phi;
+    x0 = (indgen(npx) - npx/2+1)(,-:1:npx) *tel.pixSize * N/(npx*tel.diam/2.);
+    y0 = transpose(x0);
+    phi_ncpa = interp2(y,x,phi_n,y0,x0);
+  }else{
+    phi_ncpa = phi_n;
+  }
+  
+  //FTO of the telescope + abstats
+  P = circularPupFunction(tel.diam,tel.obs,N,tel.pixSize);
+  OTF_stats = autocorrelation(P*exp(1i*(phi + phi_ncpa + phi_tt)));
+
+  //normalization
+  OTF_stats /= tel.aeraInPix^2;
+  PSF_stats = fft(OTF_stats).re;
+
+    
+  //computing statistics
+  SR_stats = sum(autocorrelation(P*exp(1i*(phi))))/sum(autocorrelation(P));
+  SR_ncpa  = sum(autocorrelation(P*exp(1i*(phi_ncpa))))/sum(autocorrelation(P));
+  sigNcpa  = phi_ncpa(where(P))(rms) * 1550./2./pi;
+
+  //Getting the fitting NCPA PSF
+  PSF_ncpa_fit = roll(abs(fft(roll(P*exp(1i*phi_ncpa))))^2);
+  PSF_ncpa_fit /= max(PSF_ncpa_fit)/SR_ncpa;
+
   return OTF_stats;
 }
 

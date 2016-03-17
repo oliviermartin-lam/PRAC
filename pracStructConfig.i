@@ -1,49 +1,46 @@
-func define_structs(timedata,simu=,verb=)
+func define_structs(timedata,verb=)
 /* DOCUMENT define_structs,"02h30m48s",verb=1;
 
  */
 
 {
   extern ast,tel,atm,rtc,wfs,dm,cam,sys,learn,learn_fit,covMatrix,budget,otf,psf;
-  if(simu == 1){
-    pracRead,pathdata;
-    return 0;
-  }else{
-    restorefits,"slopestl",timedata,pathdata,fake = 1;
-    nwfs = str2int(readFitsKey(pathdata,"NBWFS"));
-    nngs = str2int(readFitsKey(pathdata,"NOFFAX")) + 1;
-    nl   = 5;
-  
-    //Structures instantiation
-    include, "pracStructInit.i",1;
-    ast    = asterism_struct();
-    cam    = cam_struct();
-    tel    = telescope_struct();
-    atm    = atm_struct();
-    rtc    = rtc_struct();
-    wfs    = array(wfs_struct,nwfs);
-    dm     = dm_struct();
-    
-    sys    = sys_struct();
-    learn  = learn_struct();
-    learn_fit  = learnfit_struct();
-    covMatrix = covmatrix_struct();
-    budget = budget_struct();
-    otf    = otf_struct();
-    psf    = psf_struct();
 
-    // Structures filling
-    defineAsterism,pathdata,verb=verb;
-    defineCam,pathdata,verb=verb;
-    defineTel,pathdata,verb=verb;
-    defineWfs,pathdata,verb=verb;
-    defineRtc,timedata,verb=verb;
-    defineDm,pathdata,verb=verb;
-    defineSys,tracking;
-    defineAtm,pathdata,varNoise,verb=verb;
-    defineLearn;
-    defineCovMat,varNoise,verb=verb;
-  }
+  restorefits,"slopestl",timedata,pathdata,fake = 1;
+  nwfs = str2int(readFitsKey(pathdata,"NBWFS"));
+  nngs = str2int(readFitsKey(pathdata,"NOFFAX")) + 1;
+  nl   = 5;
+  
+  //Structures instantiation
+  include, "pracStructInit.i",1;
+  ast    = asterism_struct();
+  cam    = cam_struct();
+  tel    = telescope_struct();
+  atm    = atm_struct();
+  rtc    = rtc_struct();
+  wfs    = array(wfs_struct,nwfs);
+  dm     = dm_struct();
+    
+  sys    = sys_struct();
+  learn  = learn_struct();
+  learn_fit  = learnfit_struct();
+  covMatrix = covmatrix_struct();
+  budget = budget_struct();
+  otf    = otf_struct();
+  psf    = psf_struct();
+
+  // Structures filling
+  defineAsterism,pathdata,verb=verb;
+  defineCam,pathdata,verb=verb;
+  defineTel,pathdata,verb=verb;
+  defineWfs,pathdata,verb=verb;
+  defineRtc,timedata,verb=verb;
+  defineDm,pathdata,verb=verb;
+  defineSys,tracking;
+  defineAtm,pathdata,varNoise,verb=verb;
+  defineLearn;
+  defineCovMat,varNoise,verb=verb;
+  
 }
 
 func defineAsterism(pathdata,verb=)
@@ -181,25 +178,25 @@ func defineTel(pathdata,verb=)
     tel.zenith    = acos(1./tel.airmass)*180/pi;
   }
   
-  tel.plateScale = str2flt(readFitsKey(pathdata,"PLSCALE"));
-  tel.azimuth = 0;
+  tel.plateScale  = str2flt(readFitsKey(pathdata,"PLSCALE"));
+  tel.azimuth     = 0;
 
   // number of pixels in the images of phase spectrum (Wfit, Waniso, ...)
-  nLenslet = max(readFitsKeyArray(pathdata,"WFSSUBX"));
-  tel.pitch =  tel.diam / nLenslet;
-  tel.nPixels = max(8*2^long(log(nLenslet+1)/log(2)+0.5),512);
-  tel.pixSize = cam.pixSize
+  nLenslet           = max(readFitsKeyArray(pathdata,"WFSSUBX"));
+  tel.pitch          =  tel.diam / nLenslet;
+  tel.nPixels        = max(8*2^long(log(nLenslet+1)/log(2)+0.5),512);
+  tel.pixSize        = cam.pixSize;
   // field of View in meters
-  tel.foV = tel.nPixels*tel.pixSize;
+  tel.foV            = tel.nPixels*tel.pixSize;
   //actuator pitch in nPixels in forcing dm.dactu as a tel.pixSize multiple
-  tel.pitchSize = tel.pitch / tel.pixSize; 
+  tel.pitchSize      = tel.pitch / tel.pixSize; 
   // pixel size in the Fourier domain
   tel.fourierPixSize = 1./tel.foV;
-  tel.lambdaPerFov = tel.fourierPixSize * ast.photometry * radian2arcsec; 
-  tel.dPerFov  = tel.fourierPixSize * tel.diam;
-  tel.airyPeak = (pi/4)*(1 - tel.obs^2) * cam.dPixSizeOnLambda^2;
-  tel.aera     = tel.diam^2*(1-tel.obs^2)*pi/4;
-  tel.aeraInPix= tel.aera / tel.pixSize^2;
+  tel.lambdaPerFov   = tel.fourierPixSize * ast.photometry * radian2arcsec; 
+  tel.dPerFov        = tel.fourierPixSize * tel.diam;
+  tel.airyPeak       = (pi/4)*(1 - tel.obs^2) * cam.dPixSizeOnLambda^2;
+  tel.aera           = tel.diam^2*(1-tel.obs^2)*pi/4;
+  tel.aeraInPix      = tel.aera / tel.pixSize^2;
 }
 
 func defineWfs(pathdata,verb=)
@@ -278,30 +275,30 @@ func defineRtc(timedata,verb=)
   extern rtc;
 
   // .... System parameters retrieval ....
-  rtc.nWfs = nwfs;
-  rtc.its     = str2int(readFitsKey(pathdata,"ITS")); 
-  rtc.loopGain = str2flt(readFitsKey(pathdata,"GAINDM"));
-  rtc.BP = 10e3;
-  rtc.Fe = str2flt(readFitsKey(pathdata,"FREQ"));
-  rtc.delay = 0.003;    // loop delay in seconds
-  rtc.frameDelay = rtc.delay*rtc.Fe + 1.05;
-  rtc.obsMode = strcase(1,readFitsKey(pathdata,"OBS_MODE"));
-  rtc.nWfs = nwfs;
+  rtc.nWfs              = nwfs;
+  rtc.its               = str2int(readFitsKey(pathdata,"ITS")); 
+  rtc.loopGain          = str2flt(readFitsKey(pathdata,"GAINDM"));
+  rtc.BP                = 10e3;
+  rtc.Fe                = str2flt(readFitsKey(pathdata,"FREQ"));
+  rtc.delay             = 0.003;    // loop delay in seconds
+  rtc.frameDelay        = rtc.delay*rtc.Fe + 1.05;
+  rtc.obsMode           = strcase(1,readFitsKey(pathdata,"OBS_MODE"));
+  rtc.nWfs              = nwfs;
   rtc.ptrListOffAxisNgs = &readFitsKeyArray(pathdata,"OFFAX");
-  rtc.ptrListLgs = &readFitsKeyArray(pathdata,"LGS");
-  rtc.nLgsWfs = numberof(rtc.ptrListLgs);
-  rtc.nNgsWfs = numberof(rtc.ptrListOffAxisNgs)+1;
+  rtc.ptrListLgs        = &readFitsKeyArray(pathdata,"LGS");
+  rtc.nLgsWfs           = numberof(rtc.ptrListLgs);
+  rtc.nNgsWfs           = numberof(rtc.ptrListOffAxisNgs)+1;
 
 
   // .... matrices retrieval ....
   //interation matrix
-  suffmi  = readFitsKey(pathdata,"MI");//in pixel/ADU
-  mi = volt2adu*wfs(rtc.its).pixSize*restorefits("mi",suffmi);//in arcsec/V
+  suffmi = readFitsKey(pathdata,"MI");//in pixel/ADU
+  mi     = volt2adu*wfs(rtc.its).pixSize*restorefits("mi",suffmi);//in arcsec/V
   rtc.mi = &(mi(,1:-2)); 
   //command matrix
-  suffmc  = readFitsKey(pathdata,"MC");//in ADU/pixel
-  mc = restorefits("mc",suffmc)/(volt2adu*wfs(rtc.its).pixSize);
-  rtc.mc = &(mc(1:-2,));
+  suffmc = readFitsKey(pathdata,"MC");//in ADU/pixel
+  mc     = restorefits("mc",suffmc)/(volt2adu*wfs(rtc.its).pixSize);
+  rtc.mc = &(mc(1:-2,)); // in volts/arcsec
   
   if(is_void(mc)){
     rtc.mi = &intermat(dm);
@@ -314,7 +311,7 @@ func defineRtc(timedata,verb=)
   if(suffvolts != "VOLTFILE not found"){
     ptr_volts = restorefits("voltstl",suffvolts,pathvolts);
     if(dimsof(*ptr_volts(1))(1) != 0)
-      rtc.volts =&(((*ptr_volts(1)))(1:-2,));//exclusion of steering mirror for LGS
+      rtc.volts = &(((*ptr_volts(1)))(1:-2,));//exclusion of steering mirror for LGS
   }
 
   // .... Residual slopes
@@ -378,6 +375,12 @@ func defineAtm(pathdata,&varNoise,verb=)
   takesDiag(covnoise) = varNoise;
   covnoise = handle_tilt_from_wfstype(covnoise);
   covMatrix.noise = &covnoise;
+
+  //noise covariance matrix in closed loop
+  covnoise = array(0.,rtc.nSlopes,rtc.nSlopes);
+  takesDiag(covnoise) = determineGlobalParameters(*rtc.slopes_res,p,dp,arc=1,verb=verb);
+  covnoise = handle_tilt_from_wfstype(covnoise);
+  covMatrix.noiseCL = &covnoise;
   
   //loading of the on-sky retrieved profiles from post-processing
   atm.nLayers = nl;
@@ -475,11 +478,11 @@ func defineSys(void)
  */
 {
   extern sys;
-  sys.xshift = array(0.,nwfs);
-  sys.yshift = array(0.,nwfs);
-  sys.theta  = array(0.,nwfs); 
-  sys.magnification = array(1.,nwfs);
-  sys.centroidGain = array(1.,nwfs);
+  sys.xshift                = array(0.,nwfs);
+  sys.yshift                = array(0.,nwfs);
+  sys.theta                 = array(0.,nwfs); 
+  sys.magnification         = array(1.,nwfs);
+  sys.centroidGain          = array(1.,nwfs);
   sys.slopesToZernikeMatrix = &readfits("fitsFiles/GLOB_mrz_7x7.fits");
   sys.zernikeToSlopesMatrix = &readfits("fitsFiles/zmi_7x7.fits");
 }
@@ -490,19 +493,19 @@ func defineLearn(void)
 {
   extern learn;
 
-  learn.nl = atm.nLayers;
-  learn.ttr = 0;
-  learn.diagonal = 0;
+  learn.nl               = atm.nLayers;
+  learn.ttr              = 0;
+  learn.diagonal         = 0;
   learn.runLearnTwoSteps = 0;
-  learn.cnh = atm.cnh;
-  learn.altitude = atm.altitude;
-  learn.l0h = atm.l0h;
-  learn.tracking = sys.tracking;
-  learn.xshift = sys.xshift;
-  learn.yshift = sys.yshift;
-  learn.magnification = sys.magnification;
-  learn.theta = sys.theta;
-  learn.centroidGain = sys.centroidGain;
+  learn.cnh              = atm.cnh;
+  learn.altitude         = atm.altitude;
+  learn.l0h              = atm.l0h;
+  learn.tracking         = sys.tracking;
+  learn.xshift           = sys.xshift;
+  learn.yshift           = sys.yshift;
+  learn.magnification    = sys.magnification;
+  learn.theta            = sys.theta;
+  learn.centroidGain     = sys.centroidGain;
 }
 
 func defineCovMat(varNoise,verb=)
