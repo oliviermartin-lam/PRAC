@@ -1,70 +1,306 @@
-func processCanaryPSF(date,&SRIR,&snr,pathPsf=,setmax=,click=,box=,disp=)
-  /* DOCUMENT
 
+/*
+ ____  _            _     _             _   _       
+/ ___|| |_ _ __ ___| |__ | |  _ __ __ _| |_(_) ___  
+\___ \| __| '__/ _ \ '_ \| | | '__/ _` | __| |/ _ \ 
+ ___) | |_| | |  __/ | | | | | | | (_| | |_| | (_) |
+|____/ \__|_|  \___|_| |_|_| |_|  \__,_|\__|_|\___/ 
+                                                    
+*/
 
-
+func getSR(Psf,x0,y0, pixelsMap,nLDpix,box, &processedPsf, &snr)
+/*
  */
-  
 {
+  if( is_void(nLDpix) || nLDpix==0 ) {
+    write,"You have to provide the pixel scale data.camir.uld of the IR cam !"
+  }
   
-  //Size of the box
-  if(is_void(box))
-    box=70;
-  //date
-  timePsf = decoupe(date,'_')(0);
- 
-  //..... Load raw image ......//
-  imageRaw = restorefits("ir",timePsf,path_ir);
-  //load bg
-  suff_bg = readFitsKey(path_ir,"BGNAME");
-  bg2im = restorefits("irbg",suff_bg);
-  //PSF
-  if(dimsof(imageRaw)(1)==3){
-    imageRaw = imageRaw(,,avg);
-  }
-  if(dimsof(bg2im)(1)==3){
-    bg2im = bg2im(,,avg);
-  }
-  psf_ir = (imageRaw - bg2im);
+  // deadpixels correction (the "dead pixel frame" global variable  *irData.deadPixIndex
+  // is defined at the end of widget_loop.i)
+  if(!is_void(pixelsMap))
+    im = CorrDeadPixFrame(pixelsMap, Psf);
+  else
+    im = Psf;
+  // FIRST ROUGH ITERATION ..............
+  imBase = cropImage(im, x0, y0,box);
 
-  if(dimsof(psf_ir)(1) == 3){
-    psf_ir = psf_ir(,,avg);
+  
+  airyPeak = (pi/4) * (1-tel.obs^2) * (nLDpix)^2;
+  im = evalBg( imBase, dead=2 );        // remove background (evaluated on image edges)
+  sumim = sum(im);
+  if( sumim<=0 ) {
+    write,format="WARNING : Somme de l image = %g\n",sumim;
+    return 0.00;
   }
+  im /= sumim;
+  SR = max(im) / airyPeak;
+  
+  // TAKING DECISIONS ..........
+  if( SR>0.50 ) {
+    // If Strehl is good then the background can be evaluated by fitting
+    // the central part of the FTM
+    // No corr of dead pixels because the peak may be taken for a deadpix
+    im = adjustBgWithFTM( imBase, dead=0 );
+  } else if( SR>0.40 ) {
+    im = adjustBgWithFTM( imBase, dead=1 );
+    im = filterPsf(im, nLDpix);
+  } else if( SR>0.1 ) {
+    // If Strehl is not so good then the background can be evaluated by fitting
+    // the central part of the FTM
+    im = evalBg( imBase, dead=2 );
+    im = filterPsf(im, nLDpix);
+  } else {
+    im = evalBg( imBase, dead=4 );
+    im = filterPsf(im, nLDpix);
+  }
+  
+  // Image normalization
+  sumim = sum(im);
+  if( sumim<0 ) {
+    write,format="WARNING : Somme de l image = %g\n",sum(im);
+    return 0.00;
+  }
+  im /= sumim;
 
-  xPsf = str2int(readFitsKey(path_ir,"X0PSF"));
-  yPsf = str2int(readFitsKey(path_ir,"Y0PSF"));
-  uld = str2flt(readFitsKey(path_ir,"NPIXLD"));
-  if(click){
-    winkill,0;
-    posPsf = findPsfPosition( psf_ir, box, 0);
-    if(sum(posPsf) == -1){return -1;}//to go to the next file
-    if(sum(posPsf) == -10){return -10;}//to finish the automatic process
-    xPsf = posPsf(1);
-    yPsf = posPsf(2);
-    replaceFitsKey,path_ir,"X0PSF",xPsf;
-    replaceFitsKey,path_ir,"Y0PSF",yPsf;
-    write,format="Image is located at %d,%d \n",posPsf(1),posPsf(2);
-  }
+  // Strehl conversion
+  im /= airyPeak;
+  // image recentering
+  posmax = where2( max(im)==im )(,1);
+  processedPsf = roll(im, (box/2+1)-posmax);
+  // Strehl !
+  SR = max(processedPsf);
+  // SNR estimation, and Strehl robustness
+  snr = strehlSNR(processedPsf);
     
-  //load dead pixels map
-  pixelMap = CreateDeadPixFrame(readfits("fitsFiles/locateDeadPixels"+cam.name+".fits"));
-  
-  //Shretl ratio
-  SRIR = getSR(psf_ir,xPsf,yPsf,*cam.deadPixIndex,uld,box, psf2, snr);
-  SRnorm = arrondi(100*SRIR,1)/100.;
-  cutmax = SRIR;
-  if(setmax) cutmax = setmax;
- 
-  if(disp){
-    uz = cam.pixSize;
-    window,0; clr;
-    pli,psf2,-box*uz/2,-box*uz/2,box*uz/2,box*uz/2,cmin = 0,cmax=cutmax;
-    xytitles,"Arcsecs","Arcsecs";
-  }
-
-  return psf2;
+  return SR;
 
 }
+
+func strehlSNR(im)
+/* DOCUMENT  strehlSNR(im)
+ 
+ Computes the amplitude E of the error bar on the Strehl ratio,
+ expressed as a fraction of it.
+ 
+ If E=0.5, the error bar of a SR=0.10 will range from 0.05 to 0.015
+ SEE ALSO
+ */
+{
+  n = dimsof(im)(2);
+  msk = gdist(n) > n/2;
+  ibg = where(msk);  // pupil indexes pointing on background-only area
+  noise = im(ibg)(*)(rms);
+  if(noise==0) return 0;
+  if( max(im)==0 ) return 2;
+  fbg = n*noise / sqrt(sum(msk));
+  fpeak = noise / max(im);
+
+  return abs(fbg,fpeak);
+}
+
+/*
+ _______        ___   _ __  __ 
+|  ___\ \      / / | | |  \/  |
+| |_   \ \ /\ / /| |_| | |\/| |
+|  _|   \ V  V / |  _  | |  | |
+|_|      \_/\_/  |_| |_|_|  |_|
+*/
+
+
+func getPsfFwhm(im,pixSize,&p,fit=)
+/* DOCUMENT fwhm = getPsfFwhm(im,pixSize,p,fit=2)
+
+   Estimates the FWHM of map im using:
+   fit == 1: Gaussian fitting with 3 parameters
+   fit == 2: Moffat fitting with 5 parameters
+   else: Moffat fitting with 5 parameters
+
+ */
+{
+
+  
+  N   = dimsof(im)(2);
+  
+  if(fit==1){
+    //Grabbing a cut of the psf
+    p   = [1.,0,1];
+    x   = (indgen(N) -N/2-1)(,-:1:N);
+    y   = transpose(x);    
+    r   = abs(x,y);
+    res = lmfit(gauss,r,p,im,fit=[1,2,3]);
+
+    sigma = a(3);
+    fwhm  = 2*sqrt(2*log(2))*sigma;
+  
+    return fwhm*pixSize;
+
+  }else if(fit == 2){
+
+    //Grabbing a cut of the psf
+    p   = [1.,1.,1.,1.,0.];//I0,ax,ay,beta,theta
+    x   = (indgen(N) -N/2-1)(,-:1:N);
+    y   = transpose(x);    
+    r   = [x,y];
+    res = lmfit(moffat,r,p,im,fit=[1,2,3,4,5]);
+
+    fwhm  = sqrt(2)*sqrt(2^(1./p(4)) -1.)*sqrt(p(2)^2+p(3)^2);
+
+    return fwhm*pixSize;
+    
+  }else{
+
+    im /= max(im);
+    p1d  = im(N/2+1,N/2+1:) + im(N/2+1:,N/2+1) ;
+    p1d /= max(p1d);
+    //circularAveragePsf(im);
+    
+    //Determine the first point below .5
+    k=1;
+    while(p1d(k) > 0.5 & k<N){
+      k++;
+    }
+
+    k1 = k-1;
+    k0 = k;
+
+
+    if(k0 >= 3){
+      
+      y = p1d(k0-2:k0+2);
+      x = indgen(k0-2:k0+2);
+      tmp = (avg(x*x)-avg(x)^2.);
+      a = (avg(y*x)-avg(x)*avg(y))/tmp;
+      b = avg(y) - a*avg(x);
+
+    }else if(k0>1 && k0<3){
+
+      //Linear regression with the previous sample
+      a = (p1d(k1) - p1d(k0))/(k1-k0);
+      b = (-p1d(k1)*k0 + p1d(k0)*k1) /(k1-k0);
+      k05 = (0.5-b)/a;
+
+    }
+    else{
+      return 0;
+    }
+
+    k05 = (0.5-b)/a;  // solve equation a*k05 + b = 0.5
+  
+    return k05*pixSize;
+  }
+}
+
+
+func moffat(r,param)
+/* DOCUMENT f = moffat(r,param)
+
+   Returns the Moffat function
+   f(r) = I0(1 + ((xcos(th)-ysin(th))/ax)^2  + ((xsin(th)-ycos(th))/ay)^2 )^(-beta),
+   where:
+   I0 = param(1): amplitude
+   ax = param(2): x elongation
+   ay = param(3): y elongation
+   beta = param(4): skewness
+   th   = param(5): rotation angle in degree
+ */
+{
+  x = r(,,1);
+  y = r(,,2);
+  I0    = param(1);
+  ax    = param(2);
+  ay    = param(3);
+  beta  = param(4);
+  theta = pi*param(5)/180.;
+  
+  return I0*(1.+((x*cos(theta)-y*sin(theta))/ax)^2 + ((x*sin(theta)-y*cos(theta))/ay)^2)^(-beta); 
+
+}
+/*
+ _____                                          _ 
+| ____|_ __  ___  __ _ _   _  __ _ _ __ ___  __| |
+|  _| | '_ \/ __|/ _` | | | |/ _` | '__/ _ \/ _` |
+| |___| | | \__ \ (_| | |_| | (_| | | |  __/ (_| |
+|_____|_| |_|___/\__, |\__,_|\__,_|_|  \___|\__,_|
+                    |_|                           
+ _____                            
+| ____|_ __   ___ _ __ __ _ _   _ 
+|  _| | '_ \ / _ \ '__/ _` | | | |
+| |___| | | |  __/ | | (_| | |_| |
+|_____|_| |_|\___|_|  \__, |\__, |
+                      |___/ |___/ 
+*/
+func getEE(a,z,boxsize)
+/* DOCUMENT getEE(a,z,boxsize)
+
+   Returns the ensquared energy from image <a> in a box of side
+   <boxsize>. The image is assumed to be symmetric, centered in n/2+1
+   (Fourier-like).
+   The variable <z> is the pixel size, expressed in same units as
+   <boxsize>.
+   
+   SEE ALSO:
+ */
+{
+  n = dimsof(a)(2); // taille image
+  center = n/2 + 1;
+  k1 = center - boxsize / z / 2;
+  k2 = center + boxsize / z / 2;
+  k1 = long(k1);
+  i1 = k1+1;
+  i2 = long(k2); 
+  k2 = i2+1;
+
+  ek = sum(a(k1:k2, k1:k2));
+  ei = sum(a(i1:i2, i1:i2));
+  bi = (i2-i1)*z;
+  bk = (k2-k1)*z;
+
+  ee = (boxsize-bi)/(bk-bi)*(ek-ei)+ei;
+  return ee;
+  
+}
+
+func var2sr(WFE,lambda)
+{
+  return exp(-(WFE*2*pi*1e-9/lambda)^2)
+}
+func sr2var(SR,lambda)
+{
+  return sqrt(-log(SR))*lambda*1e9/2/pi;
+}
+
+
+func getWingsEnergy(im,alpha,pixSize,lambda,D)
+/* DOCUMENT
+
+ */
+{
+  N = dimsof(im)(0);
+  // Computes the energy in the wings
+  x        = (indgen(N) - N/2-1) * pixSize;
+  x        = x(,-:1:N);
+  y        = transpose(x);
+  r        = abs(x,y);
+
+  if(is_scalar(alpha)){
+    msk    = r > alpha*radian2arcsec*lambda/D;
+    E      = 100.* sum(im*msk)/sum(im);
+  }else{
+
+    n      = numberof(alpha);
+    E      = array(0.,n);
+    
+    for(i=1;i<=n;i++){
+      msk  = r > alpha(i)*radian2arcsec*lambda/D;
+      E(i) = 100.* sum(im*msk)/sum(im);
+    }
+    
+  }
+
+  return E;
+}
+
 
 /*
  _   _ _____ ___ _     ____  
@@ -625,289 +861,4 @@ The function returns
     }
   }
   return [0.00,0.00];                    // pixel hors image ou mort
-}
-
-/*
- ____  _            _     _             _   _       
-/ ___|| |_ _ __ ___| |__ | |  _ __ __ _| |_(_) ___  
-\___ \| __| '__/ _ \ '_ \| | | '__/ _` | __| |/ _ \ 
- ___) | |_| | |  __/ | | | | | | | (_| | |_| | (_) |
-|____/ \__|_|  \___|_| |_|_| |_|  \__,_|\__|_|\___/ 
-                                                    
-*/
-
-func getSR(Psf,x0,y0, pixelsMap,nLDpix,box, &processedPsf, &snr)
-/*
- */
-{
-  if( is_void(nLDpix) || nLDpix==0 ) {
-    write,"You have to provide the pixel scale data.camir.uld of the IR cam !"
-  }
-  
-  // deadpixels correction (the "dead pixel frame" global variable  *irData.deadPixIndex
-  // is defined at the end of widget_loop.i)
-  if(!is_void(pixelsMap))
-    im = CorrDeadPixFrame(pixelsMap, Psf);
-  else
-    im = Psf;
-  // FIRST ROUGH ITERATION ..............
-  imBase = cropImage(im, x0, y0,box);
-
-  
-  airyPeak = (pi/4) * (1-tel.obs^2) * (nLDpix)^2;
-  im = evalBg( imBase, dead=2 );        // remove background (evaluated on image edges)
-  sumim = sum(im);
-  if( sumim<=0 ) {
-    write,format="WARNING : Somme de l image = %g\n",sumim;
-    return 0.00;
-  }
-  im /= sumim;
-  SR = max(im) / airyPeak;
-  
-  // TAKING DECISIONS ..........
-  if( SR>0.50 ) {
-    // If Strehl is good then the background can be evaluated by fitting
-    // the central part of the FTM
-    // No corr of dead pixels because the peak may be taken for a deadpix
-    im = adjustBgWithFTM( imBase, dead=0 );
-  } else if( SR>0.40 ) {
-    im = adjustBgWithFTM( imBase, dead=1 );
-    im = filterPsf(im, nLDpix);
-  } else if( SR>0.1 ) {
-    // If Strehl is not so good then the background can be evaluated by fitting
-    // the central part of the FTM
-    im = evalBg( imBase, dead=2 );
-    im = filterPsf(im, nLDpix);
-  } else {
-    im = evalBg( imBase, dead=4 );
-    im = filterPsf(im, nLDpix);
-  }
-  
-  // Image normalization
-  sumim = sum(im);
-  if( sumim<0 ) {
-    write,format="WARNING : Somme de l image = %g\n",sum(im);
-    return 0.00;
-  }
-  im /= sumim;
-
-  // Strehl conversion
-  im /= airyPeak;
-  // image recentering
-  posmax = where2( max(im)==im )(,1);
-  processedPsf = roll(im, (box/2+1)-posmax);
-  // Strehl !
-  SR = max(processedPsf);
-  // SNR estimation, and Strehl robustness
-  snr = strehlSNR(processedPsf);
-    
-  return SR;
-
-}
-
-func strehlSNR(im)
-/* DOCUMENT  strehlSNR(im)
- 
- Computes the amplitude E of the error bar on the Strehl ratio,
- expressed as a fraction of it.
- 
- If E=0.5, the error bar of a SR=0.10 will range from 0.05 to 0.015
- SEE ALSO
- */
-{
-  n = dimsof(im)(2);
-  msk = gdist(n) > n/2;
-  ibg = where(msk);  // pupil indexes pointing on background-only area
-  noise = im(ibg)(*)(rms);
-  if(noise==0) return 0;
-  if( max(im)==0 ) return 2;
-  fbg = n*noise / sqrt(sum(msk));
-  fpeak = noise / max(im);
-
-  return abs(fbg,fpeak);
-}
-
-/*
- _______        ___   _ __  __ 
-|  ___\ \      / / | | |  \/  |
-| |_   \ \ /\ / /| |_| | |\/| |
-|  _|   \ V  V / |  _  | |  | |
-|_|      \_/\_/  |_| |_|_|  |_|
-*/
-
-
-func getPsfFwhm(im,pixSize,&a,fit=)
-/* DOCUMENT fwhm = getPsfFwhm(im,pixSize,a,fit=2)
-
- */
-{
-
-  
-  N   = dimsof(im)(2);
-  
-  if(fit==1){
-    //Grabbing a cut of the psf
-    a   = [1.,0,1];
-    x   = (indgen(N) -N/2-1)(,-:1:N);
-    y   = transpose(x);    
-    r   = abs(x,y);
-    res = lmfit(gauss,r,a,im,fit=[1,3]);
-
-    sigma = a(3);
-    fwhm  = 2*sqrt(2*log(2))*sigma;
-  
-    return fwhm*pixSize;
-
-  }else if(fit == 2){
-
-    //Grabbing a cut of the psf
-    a   = [1.,1.,1.];
-    x   = (indgen(N) -N/2-1)(,-:1:N);
-    y   = transpose(x);    
-    r   = abs(x,y);
-    res = lmfit(moffat,r,a,im,fit=[1,2,3]);
-
-    fwhm  = 2*a(2)*sqrt(2^(1./a(3)) -1.);
-
-    return fwhm*pixSize;
-    
-  }else{
-
-    im /= max(im);
-    p1d  = im(N/2+1,N/2+1:) + im(N/2+1:,N/2+1) ;
-    p1d /= max(p1d);
-    //circularAveragePsf(im);
-    
-    //Determine the first point below .5
-    k=1;
-    while(p1d(k) > 0.5 & k<N){
-      k++;
-    }
-
-    k1 = k-1;
-    k0 = k;
-
-
-    if(k0 >= 3){
-      
-      y = p1d(k0-2:k0+2);
-      x = indgen(k0-2:k0+2);
-      tmp = (avg(x*x)-avg(x)^2.);
-      a = (avg(y*x)-avg(x)*avg(y))/tmp;
-      b = avg(y) - a*avg(x);
-
-    }else if(k0>1 && k0<3){
-
-      //Linear regression with the previous sample
-      a = (p1d(k1) - p1d(k0))/(k1-k0);
-      b = (-p1d(k1)*k0 + p1d(k0)*k1) /(k1-k0);
-      k05 = (0.5-b)/a;
-
-    }
-    else{
-      return 0;
-    }
-
-    k05 = (0.5-b)/a;  // solve equation a*k05 + b = 0.5
-  
-    return k05*pixSize;
-  }
-}
-
-
-func moffat(r,a)
-/* DOCUMENT
-
- */
-{
-  I0    = a(1);
-  alpha = a(2);
-  beta  = a(3);
-  
-  return I0*(1. + (r/alpha)^2)^(-beta); 
-
-}
-/*
- _____                                          _ 
-| ____|_ __  ___  __ _ _   _  __ _ _ __ ___  __| |
-|  _| | '_ \/ __|/ _` | | | |/ _` | '__/ _ \/ _` |
-| |___| | | \__ \ (_| | |_| | (_| | | |  __/ (_| |
-|_____|_| |_|___/\__, |\__,_|\__,_|_|  \___|\__,_|
-                    |_|                           
- _____                            
-| ____|_ __   ___ _ __ __ _ _   _ 
-|  _| | '_ \ / _ \ '__/ _` | | | |
-| |___| | | |  __/ | | (_| | |_| |
-|_____|_| |_|\___|_|  \__, |\__, |
-                      |___/ |___/ 
-*/
-func getEE(a,z,boxsize)
-/* DOCUMENT getEE(a,z,boxsize)
-
-   Returns the ensquared energy from image <a> in a box of side
-   <boxsize>. The image is assumed to be symmetric, centered in n/2+1
-   (Fourier-like).
-   The variable <z> is the pixel size, expressed in same units as
-   <boxsize>.
-   
-   SEE ALSO:
- */
-{
-  n = dimsof(a)(2); // taille image
-  center = n/2 + 1;
-  k1 = center - boxsize / z / 2;
-  k2 = center + boxsize / z / 2;
-  k1 = long(k1);
-  i1 = k1+1;
-  i2 = long(k2); 
-  k2 = i2+1;
-
-  ek = sum(a(k1:k2, k1:k2));
-  ei = sum(a(i1:i2, i1:i2));
-  bi = (i2-i1)*z;
-  bk = (k2-k1)*z;
-
-  ee = (boxsize-bi)/(bk-bi)*(ek-ei)+ei;
-  return ee;
-  
-}
-
-func var2sr(WFE,lambda)
-{
-  return exp(-(WFE*2*pi*1e-9/lambda)^2)
-}
-func sr2var(SR,lambda)
-{
-  return sqrt(-log(SR))*lambda*1e9/2/pi;
-}
-
-
-func getWingsEnergy(im,alpha,pixSize,lambda,D)
-/* DOCUMENT
-
- */
-{
-  N = dimsof(im)(0);
-  // Computes the energy in the wings
-  x        = (indgen(N) - N/2-1) * pixSize;
-  x        = x(,-:1:N);
-  y        = transpose(x);
-  r        = abs(x,y);
-
-  if(is_scalar(alpha)){
-    msk    = r > alpha*radian2arcsec*lambda/D;
-    E      = 100.* sum(im*msk)/sum(im);
-  }else{
-
-    n      = numberof(alpha);
-    E      = array(0.,n);
-    
-    for(i=1;i<=n;i++){
-      msk  = r > alpha(i)*radian2arcsec*lambda/D;
-      E(i) = 100.* sum(im*msk)/sum(im);
-    }
-    
-  }
-
-  return E;
 }

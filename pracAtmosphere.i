@@ -21,7 +21,7 @@ func determineGlobalParameters(dataset,&p,&dp,arc=,verb=)
   v = array(0.0,nngs);
   for(p=1; p<=nngs; p++) {
     icam        = ings(p);
-    // get noise in mic^2
+    // get noise in nm^2
     noise       = getNoiseZernike(noiseVar(slrange(icam)), icam, full=1, inputNoise=1,arc=arc);
     // get r0 and L0 from Zernike variance fitting
     tmpR0L0(p,) = getr0L0( dataset(slrange(icam),), icam, noise,tmpdp, i0=3,arc=arc);
@@ -93,13 +93,13 @@ func getr0L0( s, icam, noise,&du, i0=, i1=,arc=)
       if( noise>0 ) {
         // noise, as computed by function noise_a_la_rico(s,icam), in mic^2.
         // <z_i^2> = $_j R_ij^2 <s_j^2>
-        propj = ((*sys.slopesToZernikeMatrix)^2)(,sum);            // propag coeff on zernike
-        noisez = noise * propj / propj(sum);     // noise variance on each zernike, mic^2
-        noisez *= (2*pi/(atm.lambda*1e6))^2;                  // from mic^2 to radians^2 at 0.5 microns
+        propj = ((*sys.slopesToZernikeMatrix)^2)(,sum); // propag coeff on zernike
+        noisez = noise * propj / propj(sum);     // noise variance on each zernike, nm^2
+        noisez *= (2*pi/(atm.lambda*1e9))^2;           // from nm^2 to radians^2 at 0.5 microns
       }
     } else {
-      // noise, as computed by function noise_a_la_rico(s,icam,full=1), in mic^2.
-      noisez = noise * (2*pi/(atm.lambda*1e6))^2;                  // from mic^2 to radians^2 at 0.5 microns
+      // noise, as computed by function noise_a_la_rico(s,icam,full=1), in nm^2.
+      noisez = noise * (2*pi/(atm.lambda*1e9))^2;    // from nm^2 to radians^2 at 0.5 microns
     }
     nn = where( varz>noisez );
     nn0 = where( varz<=noisez );

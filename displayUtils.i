@@ -77,9 +77,9 @@ func displayLayers(cn2h,alt,xylabels,l0=,percent=,col=, thick=,strength_rms=)
 
   if(is_void(xylabels)){
     if(percent){
-      xytitles,"Relative contribution (%)","Altitude (km)";
+      xytitles,"Relative contribution [%]","Altitude [km]";
     }else{
-      xytitles,"Seeing at 500 nm  (arcsec) ","Altitude (km)";
+      xytitles,"Seeing at 500 nm  [Arcsec] ","Altitude [km]";
     }
   }else{
     xytitles,xylabels(1),xylabels(2);
@@ -246,8 +246,8 @@ func plotsBarDiagram(y,labs,y2=,y3=,thick=,col1=,col2=,col3=,title=,step=)
   
   if(!is_array(y2) && !is_array(y3) ){
     for(i=1; i<=nbar; i++){
-      d=0;
-      plfp, col1,[0,1,1,0]*y(i),([1,1,1,1]*i*step-d/2) + [-1,-1,1,1]*thick,[4];
+      d=thick/2;
+      plfp, col1,[0,1,1,0]*y(i),([1,1,1,1]*i*step) + [-1,-1,1,1]*thick,[4];
       m(i) = max(y(i));n(i) = min(y(i));
     }
   }
@@ -277,16 +277,16 @@ func plotsBarDiagram(y,labs,y2=,y3=,thick=,col1=,col2=,col3=,title=,step=)
   }
   mm = max(m)*1.05;
   for(j=1;j<=nbar;j++){
-    plt,labs(j),j,max(m(j))*1.05 + 10,tosys=1;
+    plt,labs(j),j*step-4*d,max(m(j))*1.02+5,tosys=1;
   }
   
-  limits,0,step*nbar+1;
+  limits,0,step*nbar+step;
   if(min(n)>0)
     range,0,1.1*max(m);
   else
     range,1.1*min(n),1.1*max(m);
   if(title)
-    xytitles," ","Wavefront error (nm rms)",[-0.01,0];  
+    xytitles," ","Wavefront error [nm rms]",[-0.01,0];  
 }
 
 func histo(t,n, color=, marks=,width=,type=)

@@ -54,25 +54,25 @@ func getNoiseZernike(s, icam, full=, inputNoise=,arc=)
      then propagated through the Zernike reconstruction matrix
      *rtc.mrz, and cumulated over the 36 Zernike.
 
-     Returns microns^2.
+     Returns nm^2.
      
    SEE ALSO:
  */
 {
   if( inputNoise==1 )
-    varNoise = s;  // assume that input data are noise variances, in pix^2
+    varNoise = s;  // assume that input data are noise variances, in s^2 units
   else
-    varNoise = getNoiseVar(s);  // returns the noise variance for EACH subaperture, in pixel^2
+    varNoise = getNoiseVar(s);  // returns the noise variance for EACH subaperture, in s^2 units
   
   // propagation of each individual subaperture noise
   units = wfs(icam).unit(-,);
-  if(arc) units = .5*tel.diam*1e6/radian2arcsec;
+  if(arc) units = .5*tel.diam*1e9/radian2arcsec;
   zernoiseVar = (((*sys.slopesToZernikeMatrix)^2)(,+) * varNoise(+)) * units^2;
   if( is_void(full) ) full=0;
   if( full==1 )
-    return zernoiseVar;       // returns the full zernike variances, mic^2
+    return zernoiseVar;       // returns the full zernike variances, nm^2
   else
-    return sum(zernoiseVar);  // returns the total propagated variance, mic^2
+    return sum(zernoiseVar);  // returns the total propagated variance, nm^2
 }
 
 

@@ -1,5 +1,9 @@
 func computeOTFbandwidth(geometry,obsMode,verb=)
-/* DOCUMENT
+/* DOCUMENT OTFservoLag = computeOTFbandwidth(geometry,obsMode,verb=)
+
+   Computes the OTF related to temporal MOAO system delay from the PSD.
+
+   
  */
 {
   //r0 at cam.lambda
@@ -11,11 +15,9 @@ func computeOTFbandwidth(geometry,obsMode,verb=)
   northo = where( !msk );
 
   // .... Multipling by the system Z-transfer function at each altitude
-  PSD_bw = computePSDbandwidth(k,rtc.Fe,rtc.delay,rtc.loopGain,rtc.BP,northo,mode=obsMode,verb=verb);
-
+  PSD_bw = computePSDbandwidth(mode=obsMode,verb=verb);
   // .... Retrieving the phase structure function
-  N = tel.nPixels;
-  PSD_bw(N/2+1,N/2+1) = 0.0;
+  N = dimsof(PSD_bw)(0);
   PSD_bw(N/2+1,N/2+1) = -sum(PSD_bw);  
   DPHI_bw = 2*abs(fft(PSD_bw)) *  (tel.fourierPixSize^2);
   
@@ -23,64 +25,15 @@ func computeOTFbandwidth(geometry,obsMode,verb=)
 
   return OTF_bw;
 }
-func computePSDbandwidth(k,Fe,tret,gain,BP,northo,mode=,verb=)
-/* DOCUMENT Wbp = computeBpSpectrum(k,V,dir,Fe,tret,gain,Wiener,northo)
+
+
+
+
+
+func computeOTFtiptilt(dataset,kern,N,&Dtt)
+/* DOCUMENT OTFtt = computeOTFtiptilt(dataset,kern,&Dtt)
      
-   Bandwidth error. We use the transfer function of the system,
-   defined by a sampling frequency and delay, assuming a pure
-   close-loop integrator. The attenuation of the transfer function
-   Hcor(nu) is applied on all spatial frequency k=nu/V (units equation
-   is m^-1 = s^-1 / (m/s) ).
-
-   SEE ALSO:
- */
-{
-
-  //Instantiation
-  N = tel.nPixels;
-  PSD_bw   = 0*k;
-
-  //r0 at cam.lambda
-  r0tot = atm.r0*(cam.lambda/atm.lambda)^1.2;
-  //r0^(-5/3.) at cam.lambda
-  cnh   = atm.cnh * r0tot^(-5/3.)/sum(atm.cnh);
-  l0h   = atm.l0h;
-  vh    = atm.vh;
-  //rescaling the integrated value to minimize the model error
-  L0eff = (sum(atm.l0h^(-5/3.) * atm.cnh) / sum(atm.cnh))^(-3/5.);
-  l0h   = l0h * atm.L0/L0eff;
-  //adding turbulent layers
-  for(l = 1;l<=atm.nLayers;l++){
-    nu_l = k * vh(l)/sqrt(2);
-    if(mode == "MOAO"){
-      hcor = hcorMoao(nu_l, Fe, tret, gain, BP);
-    }else if(mode == "SCAO"){
-      hcor = hcorScao(nu_l, Fe, tret, gain, BP);
-    }
-    PSD_bw +=  abs(hcor)^2 * 0.023 * cnh(l) * (k^2 + 1./l0h(l)^2.)^(-11/6.);
-  }
-  /*
-  if(mode == "SCAO"){
-    nu = k * atm.v/sqrt(2);
-    hcor = hcorScao(nu, Fe, tret, gain, BP);
-    PSD_bw = abs(hcor)^2 * computeGlobalWienerSpectrum(k, N, r0tot, atm.L0);
-  }
-  */
-  
-  PSD_bw(N/2+1,N/2+1) = 0;  
-  PSD_bw(northo) = 0.00;
-
-  return PSD_bw;
-}
-
-func computeOTFtiptilt(dataset,kern,&Dtt)
-/* DOCUMENT Wbp = computeBpSpectrum(k,V,dir,Fe,tret,gain,Wiener,northo)
-     
-   Bandwidth error. We use the transfer function of the system,
-   defined by a sampling frequency and delay, assuming a pure
-   close-loop integrator. The attenuation of the transfer function
-   Hcor(nu) is applied on all spatial frequency k=nu/V (units equation
-   is m^-1 = s^-1 / (m/s) ).
+   
 
    SEE ALSO:
  */
@@ -103,7 +56,8 @@ func computeOTFtiptilt(dataset,kern,&Dtt)
 
   }
   //calculatng the phase structure function;
-  N     = tel.nPixels;
+  if(!N)
+    N     = tel.nPixels;
   coeff = 16*tel.pixSize/(tel.diam)^2;
   x     = (indgen(N) - N/2)(,-:1:N) * coeff;
   y     = transpose(x);
@@ -116,8 +70,13 @@ func computeOTFtiptilt(dataset,kern,&Dtt)
   return OTF_tt;
 }
 
-func computeOTFfitting(geometry,verb=)
-/* DOCUMENT
+func fittingOTF(geometry,verb=)
+/* DOCUMENT  OTF = fittingOTF(geometry,verb)
+
+   Calculates the orthogonal OTF from the Won-Karman
+   atmosphere PSD based on atm.r0.
+
+   SEE ALSO:
  */
 {
   r0tot = atm.r0*(cam.lambda/atm.lambda)^1.2;
@@ -140,13 +99,14 @@ func computeOTFfitting(geometry,verb=)
 
     //defining the 0/1 square mask
     ndm    = where( msk );
-
+    
     //filling the PSD
     PSD_fit = computeWienerSpectrum(k, tel.nPixels);
+    PSD_fit *= pistonRemoval(tel.diam,tel.pitch,k,0,0);
     PSD_fit(ndm) = 0.0;
-
+    
     //computing the phase structure function
-    PSD_fit(N/2+1,N/2+1) = 0.0;
+    //PSD_fit(N/2+1,N/2+1) = 0.0;
     PSD_fit(N/2+1,N/2+1) = -sum(PSD_fit);  
     DPHI_fit = 2*abs(fft(PSD_fit)) *  (tel.fourierPixSize^2);
     
@@ -183,7 +143,8 @@ func computeOTFfitting(geometry,verb=)
     //computing the fitting PSD
     PSD_fit = computeWienerSpectrum(k, tel.nPixels);
     PSD_fit *= roll(Hfilter);
-  
+
+   
     PSD_fit(N/2+1,N/2+1) = 0.0;
     PSD_fit(N/2+1,N/2+1) = -sum(PSD_fit);  
     //computing the structure function
@@ -221,7 +182,6 @@ func defineDmFrequencyArea(k, kx, ky, sgeom, pitch )
 func computeGlobalWienerSpectrum(k, N, r0tot, outerScale)
 {
   Wiener = 0.023 * r0tot^(-5./3) * (k*k + 1./outerScale^2.)^(-11./6);
-  // frequence 0 mise a 0, vu que de ttes facons elle est `fausse'
   Wiener(N/2+1,N/2+1)=0;         
   return Wiener;
 }
@@ -264,104 +224,17 @@ func computeWienerSpectrum(k,N)
                                                     
 */
 
+            
 func filteringNoiseFactor(g,delay,obsmode)
 {
-  return g/(2-g);
   if(g==0) return 0;
+  
   if(obsmode =="MOAO"){
-    return g/(2-g);//g*(1-2*g*delay*(1-delay))/(2.-g);
+    return g*(1-2*g*delay*(1-delay))/(2.-g);
   }else if(obsmode == "SCAO"){
     return g*g/(g*(1-delay)*(2 - g*(1-delay) + 2*g*delay*(1-g*(1-delay))^2/(1+g*delay) - (g*delay)^2 ));
   }
 }
-
-func hsysScao(freq,Fe,tret,G)
-/* DOCUMENT hsys = hsysScao(freq,Fe,tret,G)
-
-   Returns the transfer function between the modes of the on-axis
-   residual phase and the  on-axis phase. It depends on the frequencies domain freq, the
-   sampling frequency freq (Hz), the gain of the loop and the delay
-   tret (seconds) between the end of the integration of the WFS and
-   the applying of the command.
-
-   Olivier Martin.
-    
-   SEE ALSO: hwfs,hbfScao,hcorScao,hdm
- */
-{
-  
-  Te = 1./Fe;
-  //fractional delay in number of frames.
-  delta = tret*Fe;
-  //define the discrete z variable
-  p = 1i*2*pi*freq + 1e-12;
-  z = exp(-p*Te);
-  //defines the transfer function
-  hsys = G*(delta + (1.-delta)*z)/(z*(z-1));
-
-  return hsys;
-}
-
-func hbfScao(freq,Fe,tret,G,BP)
-/* DOCUMENT hsys = hbfScao(freq,Fe,tret,G,BP)
-
-   Returns the transfer function between the modes of the perpendicular
-   phase and the on-axis phase. It depends on the frequencies domain freq, the
-   sampling frequency freq (Hz), the gain of the loop and the delay
-   tret (seconds) between the end of the integration of the WFS and
-   the applying of the command.
-
-   Olivier Martin.
-    
-   SEE ALSO: hwfs,hsysScao,hcorScao,hdm
- */
-{
-  hbo = hsysScao(freq,Fe,tret,G) * hdm(freq,BP) * hwfs(freq,Fe);
-  return hbo/(1. + hbo);
-}
-
-func hnoiseScao(freq,Fe,tret,G,BP)
-/* DOCUMENT hsys = hbfScao(freq,Fe,tret,G,BP)
-
-   Returns the transfer function between the modes of the perpendicular
-   phase and the on-axis phase. It depends on the frequencies domain freq, the
-   sampling frequency freq (Hz), the gain of the loop and the delay
-   tret (seconds) between the end of the integration of the WFS and
-   the applying of the command.
-
-   Olivier Martin.
-    
-   SEE ALSO: hwfs,hsysScao,hcorScao,hdm
- */
-{
-  hbo = hsysScao(freq,Fe,tret,G) * hdm(freq,BP) * hwfs(freq,Fe);
-  
-  hsys = hsysScao(freq,Fe,tret,G);
-
-  return hsys/(1. + hbo);
-}
-
-func hcorScao(freq,Fe,tret,G,BP)
-/* DOCUMENT   hcor(freq,Fe,tret,G,BP)
-
-   
-   The option an=1 sets the integrator to "analog". Doing this, an
-   extra 1/2 frame delay is added compared to case of the numeric
-   integrator an=0.
-
-   <tret> is the delay expressed as a *time in seconds*, between the
-   end of the integration and the start of the command.
-   
-*/
-{
- 
-  hbo = hsysScao(freq,Fe,tret,G) * hdm(freq,BP) * hwfs(freq,Fe);
-
-  hcor = 1./(1. + hbo);
-  
-  return hcor;
-}
-
 
 func hdm(freq,BP)
 /* DOCUMENT hmir =  hdm(freq,BP)
@@ -395,13 +268,96 @@ func hwfs(freq,Fe)
   Te = 1./Fe;
   //define the discrete z variable
   p = 1i*2*pi*freq + 1e-12;
-  z = exp(-p*Te);
+  z = exp(p*Te);
   //defines the transfer function
-  haso =  (1. - z)/(p*Te);
-  haso*=haso; //taking into account both WFS and DAC delay
+  //haso =  (1. - 1./z)/(p*Te);
+  //haso*=haso; //taking into account both WFS and DAC delay
 
+  q    = 1;
+  haso = z^(-q);
   return haso;
 }
+
+
+//////////////////////////////////
+//           SCAO              //
+////////////////////////////////
+
+func hsysScao(freq,Fe,tret,G)
+/* DOCUMENT hsys = hsysScao(freq,Fe,tret,G)
+
+   Returns the transfer function between the modes of the on-axis
+   residual phase and the  on-axis phase. It depends on the frequencies domain freq, the
+   sampling frequency freq (Hz), the gain of the loop and the delay
+   tret (seconds) between the end of the integration of the WFS and
+   the applying of the command.
+
+   Olivier Martin.
+    
+   SEE ALSO: hwfs,hbfScao,hcorScao,hdm
+ */
+{
+  
+  Te = 1./Fe;
+  //fractional delay in number of frames.
+  delta = tret*Fe;
+  //define the discrete z variable
+  p = 2i*pi*freq + 1e-12;
+  z = exp(p*Te);
+  //defines the transfer function
+  hsys = G*(delta + (1.-delta)*z)/(z*(z-1));
+  //hsys = G*z/(z-1);
+  
+  return hsys;
+}
+
+
+func hnoiseScao(freq,Fe,tret,G,BP)
+/* DOCUMENT hsys = hbfScao(freq,Fe,tret,G,BP)
+
+   Returns the transfer function between the modes of the perpendicular
+   phase and the on-axis phase. It depends on the frequencies domain freq, the
+   sampling frequency freq (Hz), the gain of the loop and the delay
+   tret (seconds) between the end of the integration of the WFS and
+   the applying of the command.
+
+   Olivier Martin.
+    
+   SEE ALSO: hwfs,hsysScao,hcorScao,hdm
+ */
+{
+  hsys = hsysScao(freq,Fe,tret,G);
+  hbo  = hsys  * hdm(freq,BP) * hwfs(freq,Fe);
+  
+  return hsys/(1. + hbo);
+}
+
+func hcorScao(freq,Fe,tret,G,BP)
+/* DOCUMENT   hcor(freq,Fe,tret,G,BP)
+
+   
+   The option an=1 sets the integrator to "analog". Doing this, an
+   extra 1/2 frame delay is added compared to case of the numeric
+   integrator an=0.
+
+   <tret> is the delay expressed as a *time in seconds*, between the
+   end of the integration and the start of the command.
+   
+*/
+{
+ 
+  hbo = hsysScao(freq,Fe,tret,G) * hdm(freq,BP) * hwfs(freq,Fe);
+
+  hcor = 1./(1. + hbo);
+  
+  return hcor;
+}
+
+
+
+//////////////////////////////////
+//           MOAO              //
+////////////////////////////////
 
 func hsysMoao(freq,Fe,tret,G)
 /* DOCUMENT hsys = hsysMoao(freq,Fe,tret,G)
@@ -422,11 +378,11 @@ func hsysMoao(freq,Fe,tret,G)
   Te = 1./Fe;
   delta = tret*Fe;//fractionnal delay in number of frames.
   //define the discrete z variable
-  p = 1i*2*pi*freq + 1e-12;
-  z = exp(-p*Te);
+  p = 2i*pi*freq + 1e-12;
+  z = exp(p*Te);
   //defines the transfer function
   hsys = G*(delta + (1.-delta)*z)/(z*(z-1+G));
-
+  
   return hsys;
 }
 

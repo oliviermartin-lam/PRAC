@@ -95,8 +95,10 @@ func funcInflu(x,y,x0)
    SEE ALSO:
  */
 {
-  // allez on va dire que ce sont des metres !
-  return 1e-6 * exp( -(x*x+y*y)/(2*x0*x0) );
+  //The amplitude has been calibrated from Kellerer 2012:
+  // the CILAS DM is linear with a stroke of 13 micrometer
+  // for voltage going from -8V to 8V.
+  return (13/16.)*1e-6 * exp( -(x*x+y*y)/(2*x0*x0) );
 }
 
 

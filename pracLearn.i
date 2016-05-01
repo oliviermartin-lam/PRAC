@@ -6,7 +6,7 @@
 |_|   |_|\__|\__|_|_| |_|\__, |
                          |___/ 
 */
-func fitCovarianceMatrix(slopesArray,nl,ttr=,fitl0=,FitMethod=,fullHD=,tomores=,verb=,deriv=)
+func fitCovarianceMatrix(slopesArray,nl,Cnn=,ttr=,fitl0=,FitMethod=,fullHD=,tomores=,verb=,deriv=,misreg=)
 /* DOCUMENT ptrcn2h = fitCovarianceMatrix(*data.slopes_dis,3,fitl0=1,FitMethod=1,fullHD=0,tomores=5000,verb=1,deriv=0)
 
    Performs a quick fitting from input arguments.
@@ -15,7 +15,7 @@ func fitCovarianceMatrix(slopesArray,nl,ttr=,fitl0=,FitMethod=,fullHD=,tomores=,
   learn.nl = nl;
   if(ttr) learn.ttr = 1;
   //.....INITIAL GUESS.....//
-  tmp = initGuessLearn(nl,fitl0=fitl0,fullHD=fullHD,tomores=tomores);
+  tmp = initGuessLearn(nl,fitl0=fitl0,fullHD=fullHD,tomores=tomores,misreg=misreg);
   pinit = tmp(,1);
   pind = tmp(,2);
 
@@ -27,8 +27,10 @@ func fitCovarianceMatrix(slopesArray,nl,ttr=,fitl0=,FitMethod=,fullHD=,tomores=,
   if(is_void(FitMethod)){
     FitMethod = 1;
   }
+  if(is_void(Cnn))
+    Cnn = *covMatrix.noise;
 
-  ptrcn2h = doLearn(Cdd,FitMethod,pinit,pind,*covMatrix.noise,verb=verb);
+  ptrcn2h = doLearn(Cdd,FitMethod,pinit,pind,Cnn,verb=verb);
  
   return ptrcn2h;
 }
@@ -86,8 +88,8 @@ func findAltitudeMax(posX,posY,&Bmax,useTS=,altituderes=,altLGS=)
 
 }
 
-func initGuessLearn(nbl,fitl0=,fullHD=,tomores=)
-  /* DOCUMENT [ptr_initarray,pind] = initGuessLearn(nb_layers,posX,posY,fullHD=,tomores=)
+func initGuessLearn(nbl,fitl0=,fullHD=,tomores=,misreg=)
+  /* DOCUMENT [ptr_initarray,pind] = initGuessLearn(nb_layers,posX,posY,fullHD=,tomores=,misreg=)
 
      Renvoie deux pointeurs pour les conditions initiales du Learn
      (ptr_initarray) et les parametres a fitter (pind).
@@ -160,17 +162,21 @@ func initGuessLearn(nbl,fitl0=,fullHD=,tomores=)
     pind(4) = &array(1,3);
   }else{pind(4) = &array(0,3);}
 
+  amis = array(0.,rtc.nWfs);
+  if(misreg == 1)
+    amis(1:-1) = 1;
+  
   //shift pupil
   pinit (5) = pinit (6) = &array(0.,rtc.nWfs);
-  pind (5) = pind (6) = &array(0.,rtc.nWfs);
+  pind (5) = pind (6) = &amis;
 
   //magnification
   pinit (7) =  &array(1.,rtc.nWfs);
-  pind  (7) =  &array(0.,rtc.nWfs);
+  pind  (7) =  &amis;
 
   //rotation
   pinit (8) =  &array(0.,rtc.nWfs);
-  pind (8) =  &array(0.,rtc.nWfs);
+  pind (8) =  &amis;
   
   return [pinit,pind];
 }
@@ -252,7 +258,7 @@ func doLearn(Cdd,fitMethod,pinit,pind,Cnn,verb=,deriv=)
     fitMethod = 1;
   }
   learn.transformationMatrix =  &identite(rtc.nSlopes);
-
+  
   //TT management
   Cdd_ttr = handle_tilt_from_wfstype(Cdd,ttr = learn.ttr);
   Cnn_ttr = handle_tilt_from_wfstype(Cnn,ttr = learn.ttr);
@@ -271,6 +277,12 @@ func doLearn(Cdd,fitMethod,pinit,pind,Cnn,verb=,deriv=)
 
   //transfers ptr init guess into tomo struct
   initStruct,pinit,pind;
+  learn_fit.xshift   = 0;
+  learn_fit.yshift   = 0;
+  learn_fit.magnification = 0;
+  learn_fit.theta    = 0;
+  learn_fit.tracking = 0;
+    
   fitEstim = packcoeffs( learn, indexFit );
   
   // .................. LEARN ....................//
@@ -308,16 +320,18 @@ func doLearn(Cdd,fitMethod,pinit,pind,Cnn,verb=,deriv=)
     }
     cnh2Struct, ptrcn2h;
     
-    //Additionnal lm fit to get additional isoplanatic process from something else than turbulence
+    //Additionnal lm fit to get mis-registration
 
     if(learn.ttr == 1){
     //erase the learn_fit struct
-    learn.ttr = 0;
-    learn_fit.cnh = 0;
+    learn.ttr          = 0;
+    learn_fit.cnh      = 0;
     learn_fit.altitude = 0;
-    learn_fit.l0h=0;
-    learn_fit.xshift = 0;
-    learn_fit.yshift = 0;
+    learn_fit.l0h      = 0;
+    learn_fit.xshift   = *pind(5);
+    learn_fit.yshift   = *pind(6);
+    learn_fit.magnification   = *pind(7);
+    learn_fit.theta    = *pind(8);
     learn_fit.tracking = [1,1,1];
     //forcing the diagonal to be null
     learn.diagonal = 1;
@@ -331,6 +345,8 @@ func doLearn(Cdd,fitMethod,pinit,pind,Cnn,verb=,deriv=)
     unpackcoeffs, fitEstim, cnh, alt,l0h,tracking,xshift,yshift,magnification,theta;
     ptrcn2h = [&abs(cnh), &alt, &abs(l0h),&tracking,&xshift,&yshift,&magnification, &theta, &magnification,&tinit];
   cnh2Struct, ptrcn2h;
+   if(is_array(res))
+     ptrcn2h = grow(ptrcn2h,[&res.chi2_last,&res.niter]);
   }
   
   return ptrcn2h;  

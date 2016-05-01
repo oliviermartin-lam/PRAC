@@ -54,20 +54,20 @@ func defineSimulStructs(void,verb=)
   tel.azimuth = 0;
 
   // number of pixels in the images of phase spectrum (Wfit, Waniso, ...)
-  nLenslet = 32;
-  tel.pitch =  tel.diam / nLenslet;
-  tel.nPixels = max(8*2^long(log(nLenslet+1)/log(2)+0.5),512);
-  tel.pixSize = 0.03;
+  nLenslet             = 7;
+  tel.pitch            = tel.diam / nLenslet;
+  tel.nPixels          = max(8*2^long(log(nLenslet+1)/log(2)+0.5),512);
+  tel.pixSize          = 0.03;
   // field of View in meters
-  tel.foV = tel.nPixels*tel.pixSize;
+  tel.foV              = tel.nPixels*tel.pixSize;
   //actuator pitch in nPixels in forcing dm.dactu as a tel.pixSize multiple
-  tel.pitchSize = tel.pitch / tel.pixSize; 
+  tel.pitchSize        = tel.pitch / tel.pixSize; 
   // pixel size in the Fourier domain
-  tel.fourierPixSize = 1./tel.foV;
-  tel.lambdaPerFov = tel.fourierPixSize * ast.photometry * radian2arcsec; 
-  tel.dPerFov  = tel.fourierPixSize * tel.diam;
-  tel.aera     = tel.diam^2*(1-tel.obs^2)*pi/4;
-  tel.aeraInPix= tel.aera / tel.pixSize^2;
+  tel.fourierPixSize   = 1./tel.foV;
+  tel.lambdaPerFov     = tel.fourierPixSize * ast.photometry * radian2arcsec; 
+  tel.dPerFov          = tel.fourierPixSize * tel.diam;
+  tel.aera             = tel.diam^2*(1-tel.obs^2)*pi/4;
+  tel.aeraInPix        = tel.aera / tel.pixSize^2;
 
   /*
  __        _______ ____  
@@ -120,14 +120,14 @@ func defineSimulStructs(void,verb=)
     |_| \_\|_| \____|
                  
   */
-  rtc.nWfs     = nwfs;
-  rtc.its      = rtc.nWfs;
-  rtc.loopGain = 1.;
-  rtc.BP       = 10e3;
-  rtc.Fe       = 150.; 
-  rtc.delay    = 0.003;    // loop delay in seconds
+  rtc.nWfs       = nwfs;
+  rtc.its        = rtc.nWfs;
+  rtc.loopGain   = 1.;
+  rtc.BP         = 10e3;
+  rtc.Fe         = 150.; 
+  rtc.delay      = 0.003;    // loop delay in seconds
   rtc.frameDelay = rtc.delay*rtc.Fe + 1.05;
-  rtc.obsMode = "MOAO";
+  rtc.obsMode    = "MOAO";
 
   rtc.ptrListOffAxisNgs = &[5,6,7];
   rtc.ptrListLgs = &[1,2,3,4];
@@ -143,9 +143,9 @@ func defineSimulStructs(void,verb=)
     /_/   \_\_| |_|  |_|\___/|____/|_|   |_| |_|_____|_| \_\_____|
 
   */
-  atm.r0 = 0.15;	
-  atm.L0 = 10.;
-  atm.v =  10.;
+  atm.r0       = 0.15;	
+  atm.L0       = 10.;
+  atm.v        = 10.;
   atm.nLayers  = nl;
   atm.cnh      = atm.r0^(-5/3.) * [65,10,15,10]/100.;
   atm.altitude = [0.,4.,10.,15.]*1e3;

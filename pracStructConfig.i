@@ -1,46 +1,63 @@
-func define_structs(timedata,verb=)
+func define_structs(timedata,typeData,NL,verb=)
 /* DOCUMENT define_structs,"02h30m48s",verb=1;
 
  */
 
 {
-  extern ast,tel,atm,rtc,wfs,dm,cam,sys,learn,learn_fit,covMatrix,budget,otf,psf;
+  extern ast,tel,atm,rtc,wfs,dm,cam,sys,learn,learn_fit,covMatrix,budget,otf,psf,fao;
 
-  restorefits,"slopestl",timedata,pathdata,fake = 1;
+  if(is_void(typeData))
+    typeData = "slopestl";
+  if(is_void(nl))
+    NL = 5;
+
+  pathPRAC = "/home/omartin/CANARY/Algorithms/PRAC/";
+  
+  if(typeData == "slopestl"){
+    
+    restorefits,"slopestl",timedata,pathdata,fake = 1;
+    
+  }else if(typeData == "datatomo"){
+    restorefits,"datatomo",timedata,pathdata,fake = 1;
+  }
+  
   nwfs = str2int(readFitsKey(pathdata,"NBWFS"));
   nngs = str2int(readFitsKey(pathdata,"NOFFAX")) + 1;
-  nl   = 5;
+
   
   //Structures instantiation
-  include, "pracStructInit.i",1;
+  include, pathPRAC + "pracStructInit.i",1;
   ast    = asterism_struct();
   cam    = cam_struct();
   tel    = telescope_struct();
   atm    = atm_struct();
+  dm     = dm_struct();
   rtc    = rtc_struct();
   wfs    = array(wfs_struct,nwfs);
-  dm     = dm_struct();
-    
-  sys    = sys_struct();
-  learn  = learn_struct();
-  learn_fit  = learnfit_struct();
+  sys       = sys_struct();
+  learn     = learn_struct();
+  learn_fit = learnfit_struct();
   covMatrix = covmatrix_struct();
-  budget = budget_struct();
-  otf    = otf_struct();
-  psf    = psf_struct();
+  budget    = budget_struct();
+  otf       = otf_struct();
+  psf       = psf_struct();
+
+  include, pathPRAC + "fourierAdaptiveOptics.i",1;
+  fao       = fao_struct();
 
   // Structures filling
   defineAsterism,pathdata,verb=verb;
   defineCam,pathdata,verb=verb;
   defineTel,pathdata,verb=verb;
   defineWfs,pathdata,verb=verb;
-  defineRtc,timedata,verb=verb;
   defineDm,pathdata,verb=verb;
-  defineSys,tracking;
-  defineAtm,pathdata,varNoise,verb=verb;
+  defineRtc,timedata,typeData,verb=verb;
+  defineSys,pathPRAC;
+  defineAtm,pathdata,typeData,varNoise,verb=verb;
   defineLearn;
-  defineCovMat,varNoise,verb=verb;
-  
+  if(typeData == "slopestl")
+    defineCovMat,verb=verb;
+  defineFao;
 }
 
 func defineAsterism(pathdata,verb=)
@@ -111,10 +128,10 @@ func defineAsterism(pathdata,verb=)
 
  
  ast.nOffAxisSources = str2flt(readFitsKey(pathdata,"NOFFAX"));
- ast.rightAscension = alpha;
- ast.declinaison = delta;
- ast.magnitude.R = magAstInR;
- ast.photometry  = str2flt(readFitsKey(pathdata,"FILTER"))*1e-9;
+ ast.rightAscension  = alpha;
+ ast.declinaison     = delta;
+ ast.magnitude.R     = magAstInR;
+ ast.photometry      = str2flt(readFitsKey(pathdata,"FILTER"))*1e-9;
 
 }
 
@@ -130,6 +147,7 @@ func defineCam(pathdata,verb=)
     
   //Load raw image
   suffir = readFitsKey(pathdata,"IRFILE");
+  
   if(suffir != "IRFILE not found"){
     cam.psfRaw = &restorefits("ir",suffir,pathir);
     //load bg
@@ -139,26 +157,37 @@ func defineCam(pathdata,verb=)
     if(dimsof(*cam.psfRaw)(1)==3){
       cam.psfRaw = cam.psfRaw(,,avg);
     }
+    
     if(dimsof(cam.bg)(1)==3){
       cam.bg = cam.bg(,,avg);
     }
 
-    cam.name = strcase(1,readFitsKey(pathir,"IRCAM"));
-    tmp = dimsof(*cam.psfRaw);
-    cam.nxPixels = tmp(2);
-    cam.nyPixels = tmp(3);
-    cam.xPsf = str2int(readFitsKey(pathir,"X0PSF"));
-    cam.yPsf = str2int(readFitsKey(pathir,"Y0PSF"));
+    cam.name         = strcase(1,readFitsKey(pathir,"IRCAM"));
+    tmp              = dimsof(*cam.psfRaw);
+    cam.nxPixels     = tmp(2);
+    cam.nyPixels     = tmp(3);
+    cam.xPsf         = str2int(readFitsKey(pathir,"X0PSF"));
+    cam.yPsf         = str2int(readFitsKey(pathir,"Y0PSF"));
     cam.exposureTime = str2flt(readFitsKey(pathdata,"EXPTIME"))*1e-6;//in sec
 
+    // Filter
+    s = "/home/omartin/CANARY/Canary_Documents/Camicaz/H-jaune.txt";
+    c = rdcols(s,2,delim="\t");
+    wavelength    = *c(1);
+    transmittance = *c(2);
+    cam.medianLambda    = 1e-9 *sum(wavelength*transmittance)/sum(transmittance);
     //IR wavelength in m
-    cam.lambda = str2flt(readFitsKey(pathir,"FILTER"))*1e-9;
+    cam.lambda           = str2flt(readFitsKey(pathir,"FILTER"))*1e-9;
     cam.dPixSizeOnLambda = str2flt(readFitsKey(pathir,"NPIXLD"));
-    D = str2flt(readFitsKey(pathdata,"TELDIAM"));
-    cam.pixSize = cam.dPixSizeOnLambda * cam.lambda/D*radian2arcsec ;
-    cam.deadPixIndex = &CreateDeadPixFrame(readfits("fitsFiles/locateDeadPixels"+cam.name+".fits"));
-    //computes the calibrated psf
+    D                    = str2flt(readFitsKey(pathdata,"TELDIAM"));
+    cam.pixSize          = cam.dPixSizeOnLambda*cam.lambda/D*radian2arcsec;
+    cam.lambda           = cam.medianLambda;//-150e-9;    
+    pixMap               = readfits("fitsFiles/locateDeadPixels"+cam.name+".fits");
+    cam.deadPixIndex     = &CreateDeadPixFrame(pixMap);
 
+    
+    
+    //computes the calibrated psf
     cam.psfCal = &processCanaryPSF(suffir,box=cam.nPixelsCropped);
     otf.sky    = &(roll(fft(roll(*cam.psfCal)).re));
   }
@@ -170,9 +199,10 @@ func defineTel(pathdata,verb=)
 
 {
   extern tel;
-  tel.diam   = str2flt(readFitsKey(pathdata,"TELDIAM"));
+  tel.diam   = 4.13;//str2flt(readFitsKey(pathdata,"TELDIAM"));
   tel.obs    = min(0.285,str2flt(readFitsKey(pathdata,"TELOBS")));
   airm       = readFitsKey(pathdata,"WHTAIRM");
+  
   if(airm != "WHTAIRM not found"){
     tel.airmass   = str2flt(airm);
     tel.zenith    = acos(1./tel.airmass)*180/pi;
@@ -181,22 +211,27 @@ func defineTel(pathdata,verb=)
   tel.plateScale  = str2flt(readFitsKey(pathdata,"PLSCALE"));
   tel.azimuth     = 0;
 
-  // number of pixels in the images of phase spectrum (Wfit, Waniso, ...)
+  // number of pixels in the images of phase spectrum 
   nLenslet           = max(readFitsKeyArray(pathdata,"WFSSUBX"));
-  tel.pitch          =  tel.diam / nLenslet;
-  tel.nPixels        = max(8*2^long(log(nLenslet+1)/log(2)+0.5),512);
-  tel.pixSize        = cam.pixSize;
+  tel.pitch          = tel.diam / nLenslet;
+  tel.nPixels        = 64;//8*2^long(log(nLenslet+1)/log(2)+0.5);
+  //max(8*2^long(log(nLenslet+1)/log(2)+0.5),512);
+  tel.nTimes         = 3;
+  tel.pixSize        = radian2arcsec*cam.lambda/tel.diam/tel.nTimes;//cam.pixSize;
   // field of View in meters
   tel.foV            = tel.nPixels*tel.pixSize;
   //actuator pitch in nPixels in forcing dm.dactu as a tel.pixSize multiple
-  tel.pitchSize      = tel.pitch / tel.pixSize; 
-  // pixel size in the Fourier domain
-  tel.fourierPixSize = 1./tel.foV;
-  tel.lambdaPerFov   = tel.fourierPixSize * ast.photometry * radian2arcsec; 
-  tel.dPerFov        = tel.fourierPixSize * tel.diam;
-  tel.airyPeak       = (pi/4)*(1 - tel.obs^2) * cam.dPixSizeOnLambda^2;
-  tel.aera           = tel.diam^2*(1-tel.obs^2)*pi/4;
-  tel.aeraInPix      = tel.aera / tel.pixSize^2;
+  if(tel.pixSize !=0){
+    tel.pitchSize      = tel.pitch / tel.pixSize; 
+    // pixel size in the Fourier domain
+    tel.fourierPixSize = 1./tel.pitch/tel.nPixels;//1./tel.foV;
+    tel.lambdaPerFov   = tel.fourierPixSize * ast.photometry * radian2arcsec; 
+    tel.dPerFov        = tel.fourierPixSize * tel.diam;
+    tel.airyPeak       = (pi/4)*(1 - tel.obs^2) * cam.dPixSizeOnLambda^2;
+    tel.aera           = tel.diam^2*(1-tel.obs^2)*pi/4;
+    tel.aeraInPix      = tel.aera / cam.pixSize^2;
+  }
+  tel.pupil =  &pupilFunction(tel.obs,tel.nPixels);
 }
 
 func defineWfs(pathdata,verb=)
@@ -267,7 +302,7 @@ func defineWfs(pathdata,verb=)
   }
 }
 
-func defineRtc(timedata,verb=)
+func defineRtc(timedata,typeData,verb=)
 /* DOCUMENT
  */
 
@@ -293,18 +328,18 @@ func defineRtc(timedata,verb=)
   // .... matrices retrieval ....
   //interation matrix
   suffmi = readFitsKey(pathdata,"MI");//in pixel/ADU
-  mi     = volt2adu*wfs(rtc.its).pixSize*restorefits("mi",suffmi);//in arcsec/V
-  rtc.mi = &(mi(,1:-2)); 
+  if(suffmi != "MI not found"){
+    mi     = volt2adu*wfs(rtc.its).pixSize*restorefits("mi",suffmi);//in arcsec/V
+    rtc.misky = &(mi(,1:-2));
+  }
   //command matrix
   suffmc = readFitsKey(pathdata,"MC");//in ADU/pixel
-  mc     = restorefits("mc",suffmc)/(volt2adu*wfs(rtc.its).pixSize);
-  rtc.mc = &(mc(1:-2,)); // in volts/arcsec
-  
-  if(is_void(mc)){
-    rtc.mi = &intermat(dm);
-    rtc.mc = &computeCommandMat(mi, nmf=-1, condi=30., disp=0);
+  if(suffmc != "MC not found"){
+    mc     = restorefits("mc",suffmc)/(volt2adu*wfs(rtc.its).pixSize);
+    rtc.mcsky = &(mc(1:-2,)); // in volts/arcsec
+    rtc.mc = &(mc(1:-2,));
   }
-  
+    
   // .... RTC provided vectors
   //voltages
   suffvolts = readFitsKey(pathdata,"VOLTFILE");
@@ -314,39 +349,53 @@ func defineRtc(timedata,verb=)
       rtc.volts = &(((*ptr_volts(1)))(1:-2,));//exclusion of steering mirror for LGS
   }
 
-  // .... Residual slopes
-  rtc.slopes_res = &returnSlopestl(timedata,pathdata,arcsec = 1);
+  if(typeData == "slopestl"){
+    // .... Residual slopes
+    rtc.slopes_res = &returnSlopestl(timedata,pathdata,arcsec = 1);
 
-  // .... Reconstructed uncorrected slopes
-  rtc.slopes_dis = &determinesSlopesdisFromSlopestl(timedata);
-  rtc.nFrames = dimsof(*rtc.slopes_dis)(0);
-  rtc.nSlopes = dimsof(*rtc.slopes_dis)(-1);
+    // .... Reconstructed uncorrected slopes
+    rtc.slopes_dis = &determinesSlopesdisFromSlopestl(timedata);
+    rtc.nFrames = dimsof(*rtc.slopes_dis)(0);
+    rtc.nSlopes = dimsof(*rtc.slopes_dis)(-1);
 
-  // ..... MOAO Reconstructor
-  if(rtc.obsMode == "MOAO"){
-    suffmt = readFitsKey(pathdata,"MT");
-    restorefits,"mt",suffmt,pathmt,fake=1;
-    wfs.type = readFitsKeyArray(pathmt,"WFSTYPE");
-    R = restorefits("mt",suffmt);
-    //unbiases the reconstructor from sensitivities
-    R =  unbiasesMtFromSensitivities(R);
-    rtc.R = &R;
-    if(verb){
-      write,format="Calibration time of the reconstructor : %s\n",strpart(suffmt,12:);
+    // ..... MOAO Reconstructor
+    if(rtc.obsMode == "MOAO"){
+      suffmt   = readFitsKey(pathdata,"MT");
+      restorefits,"mt",suffmt,pathmt,fake=1;
+      wfs.type = readFitsKeyArray(pathmt,"WFSTYPE");
+      R        = restorefits("mt",suffmt);
+      //unbiases the reconstructor from sensitivities
+      R        =  unbiasesMtFromSensitivities(R);
+      rtc.R    = &R;
+      if(verb){
+        write,format="Calibration time of the reconstructor : %s\n",strpart(suffmt,12:);
+      }
+      rtc.recType = strcase(1,readFitsKey(pathdata,"RECTYPE"));
+      if(rtc.recType != "GLAO"){
+        //get the sky cnh profile
+        suffcnh        = readFitsKey(pathdata,"CN2H");
+        ptrcnh         = restorefits("tomoparam",suffcnh);
+        rtc.skyProfile = &[abs(*ptrcnh(2)),*ptrcnh(3)];
+      }
     }
     rtc.recType = strcase(1,readFitsKey(pathdata,"RECTYPE"));
-    if(rtc.recType != "GLAO"){
-      //get the sky cnh profile
-      suffcnh = readFitsKey(pathdata,"CN2H");
-      ptrcnh  = restorefits("tomoparam",suffcnh);
-      rtc.skyProfile = &[abs(*ptrcnh(2)),*ptrcnh(3)];
+    rtc.aoMode  = giveTomoMode(wfs.type,rtc.obsMode,rtc.recType);
+
+  }else if(typeData == "datatomo"){
+
+    s = restorefits("datatomo",timedata);
+    for(i=1;i<=rtc.nWfs;i++) {
+      s(slrange(i),) *= wfs(i).pixSize;
     }
+    rtc.slopes_dis = &s;
+    rtc.nFrames = dimsof(*rtc.slopes_dis)(0);
+    rtc.nSlopes = dimsof(*rtc.slopes_dis)(-1);
   }
-  rtc.recType = strcase(1,readFitsKey(pathdata,"RECTYPE"));
-  rtc.aoMode = giveTomoMode(wfs.type,rtc.obsMode,rtc.recType);
+
+   
 }
 
-func defineAtm(pathdata,&varNoise,verb=)
+func defineAtm(pathdata,typeData,&varNoise,verb=)
 {
   extern atm;
   atm.lambda = 500e-9;
@@ -363,117 +412,120 @@ func defineAtm(pathdata,&varNoise,verb=)
     write,format="Windspeed      = %.3g m/s +/- %.2g\n",atm.v,dp(3);
   }
 
-  //slopes covariance matrix
-  s = *rtc.slopes_dis;
-  s -= s(,avg);
-  covslopes = s(,+)*s(,+)/rtc.nFrames;
-  covslopes  = handle_tilt_from_wfstype(covslopes);
-  covMatrix.slopes = &covslopes;
-  
   //noise covariance matrix
   covnoise = array(0.,rtc.nSlopes,rtc.nSlopes);
   takesDiag(covnoise) = varNoise;
   covnoise = handle_tilt_from_wfstype(covnoise);
   covMatrix.noise = &covnoise;
+   
 
-  //noise covariance matrix in closed loop
-  covnoise = array(0.,rtc.nSlopes,rtc.nSlopes);
-  takesDiag(covnoise) = determineGlobalParameters(*rtc.slopes_res,p,dp,arc=1,verb=verb);
-  covnoise = handle_tilt_from_wfstype(covnoise);
-  covMatrix.noiseCL = &covnoise;
+  if(typeData == "slopestl"){
+    //slopes covariance matrix
+    s = *rtc.slopes_dis;
+    s -= s(,avg);
+    covslopes = s(,+)*s(,+)/rtc.nFrames;
+    covslopes  = handle_tilt_from_wfstype(covslopes);
+    covMatrix.slopes = &covslopes;
   
-  //loading of the on-sky retrieved profiles from post-processing
-  atm.nLayers = nl;
-
-  if(strpart(procDir,0:0) != "/")
-    procDir = procDir+"/";
+    //noise covariance matrix in closed loop
+    covnoise = array(0.,rtc.nSlopes,rtc.nSlopes);
+    takesDiag(covnoise) = determineGlobalParameters(*rtc.slopes_res,p,dp,arc=1,verb=verb);
+    covnoise = handle_tilt_from_wfstype(covnoise);
+    covMatrix.noiseCL = &covnoise;
   
-  goodDir = "profiles/" + procDir;
-  ptr_prof = readfits(goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(nl) +".fits",err=1,verb=verb);
+  
+    //loading of the on-sky retrieved profiles from post-processing
+    atm.nLayers = NL;
 
-  if(is_pointer(ptr_prof) && verb) write,"\rReading of the profiles successfully done";
+    if(strpart(procDir,0:0) != "/")
+      procDir = procDir+"/";
+  
+    goodDir = "profiles/" + procDir;
+    ptr_prof = readfits(goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(NL) +".fits",err=1,verb=verb);
+
+    if(is_pointer(ptr_prof) && verb) write,"\rReading of the profiles successfully done";
     
-  if(!is_pointer(ptr_prof)){
-    //getting the cnh and l0h profiles
-    ptrcn2h = fitCovarianceMatrix(*rtc.slopes_dis,nl,fitl0=2,FitMethod=2,fullHD=0,tomores=20000./(nl+1),ttr=1,verb=verb);
-    //getting the windspeed profiles
-    getWindspeedProfile,dvh,ddirh,verb=verb;
-    //merging all retrieved parameters and uncertainties
-    ptr_prof = array(pointer,6);
-    for(i=1;i<=4;i++){ptr_prof(i) = ptrcn2h(i);}
-    ptr_prof(5)  = &atm.vh;
-    ptr_prof(6)  = &atm.dirh;
+    if(!is_pointer(ptr_prof) ){
+      //getting the cnh and l0h profiles
+      ptrcn2h = fitCovarianceMatrix(*rtc.slopes_dis,nl,fitl0=2,FitMethod=2,fullHD=0,tomores=20000./(NL+1),ttr=1,verb=verb);
+      //getting the windspeed profiles
+      getWindspeedProfile,dvh,ddirh,verb=verb;
+      //merging all retrieved parameters and uncertainties
+      ptr_prof = array(pointer,6);
+      for(i=1;i<=4;i++){ptr_prof(i) = ptrcn2h(i);}
+      ptr_prof(5)  = &atm.vh;
+      ptr_prof(6)  = &atm.dirh;
     
-    //writing the files
-    if(!direxist(goodDir)) system,"mkdir " + goodDir;
-    writefits, goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(nl)+".fits",ptr_prof;
-  }
+      //writing the files
+      if(!direxist(goodDir)) system,"mkdir " + goodDir;
+      writefits, goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(NL)+".fits",ptr_prof;
+    }
 
-  //Updating profiles
-  atm.cnh      = abs(*ptr_prof(1));
-  atm.altitude = *ptr_prof(2);
-  atm.l0h      = abs(*ptr_prof(3));
-  atm.vh       = abs(*ptr_prof(5));
-  sys.tracking = *ptr_prof(4);
+    //Updating profiles
+    atm.cnh      = abs(*ptr_prof(1));
+    atm.altitude = *ptr_prof(2);
+    atm.l0h      = abs(*ptr_prof(3));
+    atm.vh       = abs(*ptr_prof(5));
+    sys.tracking = *ptr_prof(4);
 
-  //Managing bad identification 
-  w = where(atm.cnh > 200);
-  if(is_array(w)){
-    for(i=1;i<=numberof(w);i++){
-      if(atm.l0h(w(i)) <1){
-        atm.cnh(w(i)) = 0.;
-        atm.l0h(w(i))  = 100.;
+    //Managing bad identification 
+    w = where(atm.cnh > 200);
+    if(is_array(w)){
+      for(i=1;i<=numberof(w);i++){
+        if(atm.l0h(w(i)) <1){
+          atm.cnh(w(i)) = 0.;
+          atm.l0h(w(i))  = 100.;
+        }
       }
     }
   }
-    
-  // Re doing windspeed profile estimation
-  /*
-  learn.nl = atm.nLayers;
-  learn.cnh = atm.cnh;
-  learn.altitude = atm.altitude;
-  learn.l0h = atm.l0h;
-  learn.magnification = sys.magnification;
-  learn.xshift = sys.xshift;
-  learn.yshift = sys.yshift;
-  learn.theta = sys.theta;
-  getWindspeedProfile,dvh,ddirh,verb=verb;
-  ptr_prof(5)  = &atm.vh;
-  writefits, goodDir + "profiles_" + extractDate(pathdata) + "_nl_" + var2str(nl)+".fits",ptr_prof;
-  */
 }
 
 
 func defineDm(pathdata,verb=)
 /* DOCUMENT
- */
-
+*/
 {
   extern dm;
   nLenslet = wfs(rtc.its).nLenslet;
   dm.pitch = tel.diam / nLenslet;
   dm.nActu = nLenslet+1;
+
   //retrieving the number of valid actuators in the pupil
-  x = span(-1,1,nLenslet+1)(,-:1:nLenslet+1);
-  y = transpose(x);
-  r = sqrt(x*x+y*y);
-  msk = r<(1.0+1.4/nLenslet) & r>(tel.obs-1./nLenslet);
-  nn = where( msk );
+  x        = span(-1,1,nLenslet+1)(,-:1:nLenslet+1);
+  y        = transpose(x);
+  r        = sqrt(x*x+y*y);
+  msk      = r<(1.0+1.4/nLenslet) & r>(tel.obs-1./nLenslet);
+  nn       = where( msk );
   dm.nValidActu = numberof(nn);
+  
+  // indices of actuators = [3,4,5,6, 10,11,12,13,14,15, 17 ... ] in a Ndiam X Ndiam image
   dm.csX = &(x(nn));
   dm.csY = &(y(nn));
-  // indices of actuators = [3,4,5,6, 10,11,12,13,14,15, 17 ... ] in a Ndiam X Ndiam image
   dm.csI = &(nn);  
 
   // valeur de x0 a passer a la fonction funcInflu(x,y,x0) pour obtenir un
   // couplage defini pour l'actu voisin, avec x et y exprimes en "rayon pupille"
   dm.couplage = 0.2;
   dm.x0 = sqrt(-2/log(dm.couplage)) / nLenslet;
+
+  // Modes
+  N   = tel.nPixels;
+  Mi  = array(0.,N,N,dm.nValidActu);
+  xi  = (*dm.csX);
+  yi  = (*dm.csY);
+  tmp = pupilGeometry(N);
+  x   = tmp(,,1);
+  y   = tmp(,,2);
+  for(i=1;i<=dm.nValidActu;i++){
+    Mi(,,i) = funcInflu(x-xi(i),y-yi(i),dm.x0);
+  }
+  dm.modes = &Mi;
   
 }
 
 
-func defineSys(void)
+func defineSys(pathPRAC)
 /* DOCUMENT
  */
 {
@@ -483,8 +535,8 @@ func defineSys(void)
   sys.theta                 = array(0.,nwfs); 
   sys.magnification         = array(1.,nwfs);
   sys.centroidGain          = array(1.,nwfs);
-  sys.slopesToZernikeMatrix = &readfits("fitsFiles/GLOB_mrz_7x7.fits");
-  sys.zernikeToSlopesMatrix = &readfits("fitsFiles/zmi_7x7.fits");
+  sys.slopesToZernikeMatrix = &readfits(pathPRAC+"fitsFiles/GLOB_mrz_7x7.fits");
+  sys.zernikeToSlopesMatrix = &readfits(pathPRAC+"fitsFiles/zmi_7x7.fits");
 }
  
 func defineLearn(void)
@@ -508,51 +560,101 @@ func defineLearn(void)
   learn.centroidGain     = sys.centroidGain;
 }
 
-func defineCovMat(varNoise,verb=)
+func defineCovMat(void,verb=)
 /*DOCUMENT
  */
 {
   extern covMatrix;
 
-  //slopes covariance matrix
-  if(verb){
-      write,"\rComputing slopes covariance matrix...";
-  }
  
-  
-
   //Phase gradient synthetic matrix
-  if(verb){
-      write,"\rComputing synthetic slopes covariance matrix...";
-  }
+   
+  if(verb)  write,format="%s","Computing synthetic slopes covariance matrix...";
+  tic,10;
   fitEstim = packcoeffs(learn);
   covMatrix.learn = &covMatModel(learn, fitEstim,loworder=0,verb=verb);
-
+  if(verb) write,format="done in %.3g s\n",tac(10);
+  
   //Contribution of correctable modes by the AO system into cthe Phase gradient matrix
-  if(verb){
-      write,"\rComputing parallel modes covariance matrix...";
-  }
+  if(verb) write,format="%s","Computing parallel modes covariance matrix...";
+  tic,10;
   covMatrix.parallel = &covMatModel(learn, fitEstim,loworder=1,verb=verb);
-
+  if(verb) write,format="done in %.3g s\n",tac(10);
+  
   //Contribution of correctable modes by the Ao system into
-  if(verb){
-      write,"\rComputing aliasing covariance matrix...";
-  }
   covMatrix.aliasing = &(*covMatrix.learn - *covMatrix.parallel);
-
-  // Isoplanatic contribution from something else turbulence (vibration, tracking telescope...)
+  
+  //Isoplanatic contribution from something else turbulence (vibration, tracking telescope...)
   covTracking = 0*(*covMatrix.learn);
   covMatrix.tracking = &trackingMatCov(sys.tracking, covTracking);
 
-
+  // MMSE reconstructor
+  if(verb) write,format="%s","Computing the MMSE reconstructor ...";
+  tic,10;
   Coffoff = (*covMatrix.learn +  *covMatrix.noise)(norange(rtc.its),norange(rtc.its));
   Conoff  = (*covMatrix.parallel)(slrange(rtc.its),norange(rtc.its));
-
   //inversion
-  iCoffoff = invgen(Coffoff,cond=500);
-
+  iCoffoff = invgen(Coffoff,cond=100);
   //computation
   covMatrix.R = &(Conoff(,+) * iCoffoff(+,));
+  if(verb) write,format="done in %.3g s\n",tac(10);
+}
 
-    
+func defineFao(void)
+/* DOCUMENT defineFao
+
+   Intialiazes the fao structures
+   parameters.
+   
+ */
+{
+  extern fao;
+
+  // SOURCES
+  fao.src.lambda    = cam.lambda;
+  fao.src.magnitude = 12;
+  fao.src.zeroPoint = 1e5;
+  fao.src.zenith    = 3*arcsec2radian; //set the figure in arcsec
+  fao.src.azimuth   = 0*arcsec2radian; 
+  fao.src.location  = tan(fao.src.zenith) *[cos(fao.src.azimuth),sin(fao.src.azimuth)];
+  
+  // TELESCOPE
+  fao.tel.D         = tel.diam;
+  fao.tel.obs       = tel.obs;
+  fao.tel.aera      = pi*fao.tel.D^2 * (1-fao.tel.obs^2);
+
+  // ATMOSPHERE
+  fao.atm.nLayers   = NL;
+  fao.atm.r0        = atm.r0;
+  fao.atm.weight    = atm.cnh/sum(atm.cnh);
+  fao.atm.altitude  = atm.altitude;
+  fao.atm.L0        = atm.l0h;
+  fao.atm.windSpeed = atm.vh;
+  fao.atm.windDir   = 0*atm.vh;
+
+  // RTC
+  fao.rtc.Fe        = rtc.Fe;
+  fao.rtc.loopGain  = rtc.loopGain;
+  fao.rtc.latency   = rtc.delay;
+  fao.nTh           = 10;
+  fao.rtc.aoMode    = rtc.obsMode;
+
+  // WFS NAD SYSTEM
+  fao.pitch         = dm.pitch;
+  fao.kc            = 1./2./fao.pitch;
+  fao.resolution    = tel.nPixels;
+  fao.nTimes        = tel.nTimes;
+  fao.pixSize       = 2*fao.kc/fao.resolution;
+  fao.wfsLambda     = atm.lambda;
+  fao.varNoise      = 0;
+
+  // MISCALLANEOUS
+  fao.disp          = 0;
+  
+  // RECONSTRUCTORS AND TRANSFER FUNCTIONS
+  fao               = defineSpatialFrequency(fao);
+  fao               = reconstructionFilter(fao);
+  fao               = controller(fao);
+  fao               = spatialTransferFunction(fao);
+
 }

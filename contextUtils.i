@@ -167,7 +167,7 @@ func mirror_SH7(s_orig, sym, t=, inverse=)
  */
 {
   local inverse, t;
-  return mirror_SH_data(s_orig,7,1.0,0.1,sym, t=t, inverse=inverse);
+  return mirror_SH_data(s_orig,7,1.0,0.285,sym, t=t, inverse=inverse);
 }
 func mirror_SH_data(s_orig, n, radius, obs, sym, t=, inverse=)
 /* DOCUMENT smir = mirror_SH_data(s_orig, nssp, ext_rad, obst_rad, sym, t=, inverse=)

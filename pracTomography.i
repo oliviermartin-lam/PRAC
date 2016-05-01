@@ -14,10 +14,9 @@ func computeOTFtomographic(averageMode,&dphi,para=,Cee=,verb=)
   Cvv = propagateError2Dm(Cee, *rtc.mc );
   
   //Computing the OTF
-  OTF_tomo = makeOTF(Cvv,dphi,averageMode=averageMode,verb=verb);
+  tomoOTF = makeOTF(Cvv,dphi,averageMode=averageMode,verb=verb);
 
-  
-  return OTF_tomo;
+  return tomoOTF;
 }
 
 
@@ -33,6 +32,8 @@ func computeOTFtomographic(averageMode,&dphi,para=,Cee=,verb=)
 func computesCeeMatrix(obsmode,para=,verb=)
 {
 
+  if(is_void(para))
+    para = 0;
   //retrieves the noise covariance matrix in arcsec^2
   Cnn = *covMatrix.noise;
   
@@ -50,8 +51,9 @@ func computesCeeMatrix(obsmode,para=,verb=)
     }
     
     //adding tracking
-    covOL(indOff,indOff) += (*covMatrix.tracking)(indOff,indOff);
-
+    //covOL(indOff,indOff) += (*covMatrix.tracking)(indOff,indOff);
+    covOL += *covMatrix.tracking;
+    
     //derinving residue tomographic error
     Cee = computeCovSlopesError(covOL,*rtc.R);
     
@@ -295,41 +297,53 @@ func dij2covMat(dipl,djql,sizeSubAp1,sizeSubAp2,cnh_hl,hl,l0h_hl,altlgs1,altlgs2
   bd = -ac;
   
   if(loworder){
+    
     x0 = dm.pitch;
+    
     if(sizeSubAp1 != sizeSubAp2){
+      
       // Caa x-x
       caa_xx = -dphi_lowpass(Dijpql_x+ac,Dijpql_y,l0h_hl,x0) + dphi_lowpass(Dijpql_x+ad,Dijpql_y,l0h_hl,x0) + dphi_lowpass(Dijpql_x+bc,Dijpql_y,l0h_hl,x0) - dphi_lowpass(Dijpql_x+bd,Dijpql_y,l0h_hl,x0);
       // Caa y-y
       caa_yy = -dphi_lowpass(Dijpql_x,Dijpql_y+ac,l0h_hl,x0) + dphi_lowpass(Dijpql_x,Dijpql_y+ad,l0h_hl,x0) + dphi_lowpass(Dijpql_x,Dijpql_y+bc,l0h_hl,x0) - dphi_lowpass(Dijpql_x,Dijpql_y+bd,l0h_hl,x0);
+
     }else{
+      
       //in this case, ac = bd = 0
       // Caa x-x
       caa_xx = -2*dphi_lowpass(Dijpql_x,Dijpql_y,l0h_hl,x0) + dphi_lowpass(Dijpql_x+ad,Dijpql_y,l0h_hl,x0) + dphi_lowpass(Dijpql_x+bc,Dijpql_y,l0h_hl,x0);
       // Caa y-y
       caa_yy = -2*dphi_lowpass(Dijpql_x,Dijpql_y,l0h_hl,x0) + dphi_lowpass(Dijpql_x,Dijpql_y+ad,l0h_hl,x0) + dphi_lowpass(Dijpql_x,Dijpql_y+bc,l0h_hl,x0);
     }
+    
     // Caa x-y
     caa_xy = -dphi_lowpass(Dijpql_x+d1,Dijpql_y-d2,l0h_hl,x0) + dphi_lowpass(Dijpql_x+d1,Dijpql_y+d2,l0h_hl,x0) + dphi_lowpass(Dijpql_x-d1,Dijpql_y-d2,l0h_hl,x0) - dphi_lowpass(Dijpql_x-d1,Dijpql_y+d2,l0h_hl,x0);
+    
   }else{
+    
     if(sizeSubAp1 != sizeSubAp2){
       // Caa x-x
       caa_xx = -DPHI(Dijpql_x+ac,Dijpql_y,l0h_hl) + DPHI(Dijpql_x+ad,Dijpql_y,l0h_hl) + DPHI(Dijpql_x+bc,Dijpql_y,l0h_hl) - DPHI(Dijpql_x+bd,Dijpql_y,l0h_hl);
       // Caa y-y
       caa_yy = -DPHI(Dijpql_x,Dijpql_y+ac,l0h_hl) + DPHI(Dijpql_x,Dijpql_y+ad,l0h_hl) + DPHI(Dijpql_x,Dijpql_y+bc,l0h_hl) - DPHI(Dijpql_x,Dijpql_y+bd,l0h_hl);
+      
     }else{
       // Caa x-x
       caa_xx = -2*DPHI(Dijpql_x,Dijpql_y,l0h_hl) + DPHI(Dijpql_x+ad,Dijpql_y,l0h_hl) + DPHI(Dijpql_x+bc,Dijpql_y,l0h_hl);
       // Caa y-y
       caa_yy = -2*DPHI(Dijpql_x,Dijpql_y+ac,l0h_hl) + DPHI(Dijpql_x,Dijpql_y+ad,l0h_hl) + DPHI(Dijpql_x,Dijpql_y+bc,l0h_hl);
+      
     }
+    
     // Caa x-y
     caa_xy = -DPHI(Dijpql_x+d1,Dijpql_y-d2,l0h_hl) + DPHI(Dijpql_x+d1,Dijpql_y+d2,l0h_hl) + DPHI(Dijpql_x-d1,Dijpql_y-d2,l0h_hl) - DPHI(Dijpql_x-d1,Dijpql_y+d2,l0h_hl);
+    
   }
   
   caa = array(0.,2*nValidSubAp1,2*nValidSubAp2);
-  caa(1:nValidSubAp1,1:nValidSubAp2) = caa_xx;
-  caa(1:nValidSubAp1, 1+nValidSubAp2:nValidSubAp2*2) = caa_xy;
-  caa(1+nValidSubAp1:nValidSubAp1*2,1:nValidSubAp2) = caa_xy;
+  caa(1:nValidSubAp1,1:nValidSubAp2)                               = caa_xx;
+  caa(1:nValidSubAp1, 1+nValidSubAp2:nValidSubAp2*2)               = caa_xy;
+  caa(1+nValidSubAp1:nValidSubAp1*2,1:nValidSubAp2)                = caa_xy;
   caa(1+nValidSubAp1:nValidSubAp1*2,1+nValidSubAp2:nValidSubAp2*2) = caa_yy;
 
   //units
@@ -750,79 +764,7 @@ func unMoinsJ0(x)
   }
 }
 
-func gamma_R(x)
-/* DOCUMENT gamma(x) : fonction gamma generalisee a R
-   utilisation de la relation :
-   gamma(x)*gamma(-x)=-pi/(x*sin(pi*x))
-*/
-{
-  require,"gamma.i";
-  
-  //on impose gamma(1)=1;
-  gamma_1=1.0;
-  
-  if (is_scalar(x))
-    {
-      a=[x];
-    }
-  else
-    {
-      a=x;
-    }
 
-  a*=1.0;
-  result=a;
-  
-  //on fait le test sur le domaine de a
-  idx=where((a>0.0)&(a<1.0));
-  if (numberof(idx)!=0)
-    {
-      z=a(idx);
-      result(idx)=exp(ln_gamma(z));
-    }
-  
-  //on fait le test pour a==1
-  idx=where((a==1.0));
-  if (numberof(idx)!=0)
-    result(idx)=gamma_1;
-  
-  //on fait le test pour a>=1
-  idx=where(a>=1.0);
-  if (numberof(idx)!=0)
-    {
-      z=a(idx);
-      result(idx)=exp(lngamma(z));
-    }
-  
-  //on fait le test pour -1<z<0
-  idx=where((a>-1.0)&(a<0.0));
-  if (numberof(idx)!=0)
-    {
-      z=-1.0*a(idx);
-      temp=-1.0*pi;
-      temp/=z;
-      temp/=sin(pi*z);
-      temp/=exp(ln_gamma(z));
-      result(idx)=temp;
-    }
-  
-  //on fait le test pour z<-1
-  idx=where(a<-1.0);
-  if (numberof(idx)!=0)
-    {
-      z=-1.0*a(idx);
-      temp=-1.0*pi;
-      temp/=z;
-      temp/=sin(pi*z);
-      temp/=exp(lngamma(z));
-      result(idx)=temp;
-    }
-  
-  if (is_scalar(x))
-    return(result(1));
-  else
-    return(result);
-}
 
 /*
  __  __       _        _               

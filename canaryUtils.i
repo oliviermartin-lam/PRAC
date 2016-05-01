@@ -1,3 +1,71 @@
+func processCanaryPSF(date,&SRIR,&snr,pathPsf=,setmax=,click=,box=,disp=)
+  /* DOCUMENT
+
+
+
+ */
+  
+{
+  
+  //Size of the box
+  if(is_void(box))
+    box=70;
+  //date
+  timePsf = decoupe(date,'_')(0);
+ 
+  //..... Load raw image ......//
+  imageRaw = restorefits("ir",timePsf,path_ir);
+  //load bg
+  suff_bg = readFitsKey(path_ir,"BGNAME");
+  bg2im = restorefits("irbg",suff_bg);
+  //PSF
+  if(dimsof(imageRaw)(1)==3){
+    imageRaw = imageRaw(,,avg);
+  }
+  if(dimsof(bg2im)(1)==3){
+    bg2im = bg2im(,,avg);
+  }
+  psf_ir = (imageRaw - bg2im);
+
+  if(dimsof(psf_ir)(1) == 3){
+    psf_ir = psf_ir(,,avg);
+  }
+
+  xPsf = str2int(readFitsKey(path_ir,"X0PSF"));
+  yPsf = str2int(readFitsKey(path_ir,"Y0PSF"));
+  uld = str2flt(readFitsKey(path_ir,"NPIXLD"));
+  if(click){
+    winkill,0;
+    posPsf = findPsfPosition( psf_ir, box, 0);
+    if(sum(posPsf) == -1){return -1;}//to go to the next file
+    if(sum(posPsf) == -10){return -10;}//to finish the automatic process
+    xPsf = posPsf(1);
+    yPsf = posPsf(2);
+    replaceFitsKey,path_ir,"X0PSF",xPsf;
+    replaceFitsKey,path_ir,"Y0PSF",yPsf;
+    write,format="Image is located at %d,%d \n",posPsf(1),posPsf(2);
+  }
+    
+  //load dead pixels map
+  pixelMap = CreateDeadPixFrame(readfits("fitsFiles/locateDeadPixels"+cam.name+".fits"));
+  
+  //Shretl ratio
+  SRIR = getSR(psf_ir,xPsf,yPsf,*cam.deadPixIndex,uld,box, psf2, snr);
+  SRnorm = arrondi(100*SRIR,1)/100.;
+  cutmax = SRIR;
+  if(setmax) cutmax = setmax;
+ 
+  if(disp){
+    uz = cam.pixSize;
+    window,0; clr;
+    pli,psf2,-box*uz/2,-box*uz/2,box*uz/2,box*uz/2,cmin = 0,cmax=cutmax;
+    xytitles,"Arcsecs","Arcsecs";
+  }
+
+  return psf2;
+
+}
+
 /*
     _    ____ _____ _____ ____  ___ ____  __  __ 
    / \  / ___|_   _| ____|  _ \|_ _/ ___||  \/  |
@@ -168,21 +236,30 @@ func giveNCPADataDir(Dir){
   return [DirNCPA,suffirbench];
 }
 
-func getOTFncpa(nPixels,procDir,&SR_bench,&PSF_ncpa,disp=)
+func getOTFncpa(nPixels,procDir,&SR_bench,&ncpaPSF,interp=,disp=)
+/* DOCUMENT  OTF = getOTFncpa(nPixels,procDir,SR_bench,PSF_ncpa,disp=)
+
+   Returns the OTF from calibrated NCPA bench image.
+
+ */
 {
 
   // .... finding the directories where ncpa calibration are storaged
-  tmp = giveNCPADataDir(procDir);
-  DirNCPA = tmp(1);
-  timencpa = tmp(2);
+  tmp         = giveNCPADataDir(procDir);
+  DirNCPA     = tmp(1);
+  timencpa    = tmp(2);
   dataDirRoot = dataDir +  DirNCPA;
-  // .... loading, cleaning (background extraction, dead pixel processing) and cropping the best PSF got on bench
-  PSF_ncpa = processCanaryPSF(timencpa,SR_bench,box=nPixels,disp=disp);
-  OTF_ncpa = fft(roll(PSF_ncpa)).re;
-
-  SR_bench = getSR(roll(fft(OTF_ncpa).re),nPixels/2,nPixels/2,[],cam.dPixSizeOnLambda,nPixels,PSF_ncpa, snr);
-  return roll(OTF_ncpa);
-
+  // .... loading, cleaning (background extraction, dead pixel processing)
+  // and cropping the best PSF got on bench
+  ncpaPSF = processCanaryPSF(timencpa,SR_bench,box=nPixels,disp=disp);
+  ncpaOTF = roll(fft(roll(ncpaPSF)).re);
+  //Interpolating
+  if(interp == 1)
+    ncpaOTF = interpolateOTF(ncpaOTF,tel.nPixels);
+  //normalization
+  //ncpaOTF /= sum(ncpaOTF)/(psf.SR_ncpa*sum(*otf.tel));
+    
+  return ncpaOTF;
 }
 
 
@@ -216,11 +293,11 @@ func ncpaPhaseDiversity(modes,&sigNcpa,&SR_ncpa,&psfNcpa,&psfNcpa_fit)
   obs       = str2flt(readFitsKey(path,"TELOBS"));
   D         = str2flt(readFitsKey(path,"TELDIAM"));
   pixsize   = 0.03;//cam.pixSize;     // [arcsec]
-  nmodesmax = 200;
+  nmodesmax = 80;
   focstep   = 2*pi*100e-9/lambda; // 100 nm of focus on Xenics
   allfocs   = [1,-1,0,2,-2]*focstep;
  
-  opp = opra(imCent,allfocs,lambda,pixsize,D,cobs=obs,nmodes=nmodesmax,use_mode=modes,first_nofit_astig=0,fix_cobs=0,fix_pix=0,fix_defoc = 0,fix_amp=0,fix_kern=0,niter=100,gui=1,nm=1,progressive=1);
+  opp = opra(imCent,allfocs,lambda,pixsize,D,cobs=obs,nmodes=nmodesmax,use_mode=modes,first_nofit_astig=0,fix_cobs=0,fix_pix=0,fix_defoc = 0,fix_amp=0,fix_kern=0,niter=200,gui=1,nm=1,progressive=1);
 
   coefs = *(*opp.coefs(1))(1);//in rd
   mod = *opp.modes;
@@ -236,6 +313,7 @@ func ncpaPhaseDiversity(modes,&sigNcpa,&SR_ncpa,&psfNcpa,&psfNcpa_fit)
       phhf += coefs(i) * mod(,,i);
     }
   }
+  phase = (opp.phase)(,,1);
 
   //determining the fitted psf
   P = opp.pupi;
@@ -248,6 +326,7 @@ func ncpaPhaseDiversity(modes,&sigNcpa,&SR_ncpa,&psfNcpa,&psfNcpa_fit)
   
   writefits,"fitsFiles/ncpaCalibCoefs_"+var2str(nmodesmax)+".fits",coefs;
   writefits,"fitsFiles/ncpaCalibModes_"+var2str(nmodesmax)+".fits",mod;
+  writefits,"fitsFiles/ncpaPhase_"+var2str(nmodesmax)+".fits",phase;
     
   return coefs;
 }

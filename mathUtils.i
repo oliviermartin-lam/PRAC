@@ -187,6 +187,99 @@ func inverse_mat(mat , nfilt, &s)
     m1 =  (u*s1(-,))(,+) * vt(+,);
     return m1;
 }
+func gamma_R(x)
+/* DOCUMENT gamma(x) : fonction gamma generalisee a R
+   utilisation de la relation :
+   gamma(x)*gamma(-x)=-pi/(x*sin(pi*x))
+*/
+{
+  require,"gamma.i";
+  
+  //on impose gamma(1)=1;
+  gamma_1=1.0;
+  
+  if (is_scalar(x))
+    {
+      a=[x];
+    }
+  else
+    {
+      a=x;
+    }
+
+  a*=1.0;
+  result=a;
+  
+  //on fait le test sur le domaine de a
+  idx=where((a>0.0)&(a<1.0));
+  if (numberof(idx)!=0)
+    {
+      z=a(idx);
+      result(idx)=exp(ln_gamma(z));
+    }
+  
+  //on fait le test pour a==1
+  idx=where((a==1.0));
+  if (numberof(idx)!=0)
+    result(idx)=gamma_1;
+  
+  //on fait le test pour a>=1
+  idx=where(a>=1.0);
+  if (numberof(idx)!=0)
+    {
+      z=a(idx);
+      result(idx)=exp(lngamma(z));
+    }
+  
+  //on fait le test pour -1<z<0
+  idx=where((a>-1.0)&(a<0.0));
+  if (numberof(idx)!=0)
+    {
+      z=-1.0*a(idx);
+      temp=-1.0*pi;
+      temp/=z;
+      temp/=sin(pi*z);
+      temp/=exp(ln_gamma(z));
+      result(idx)=temp;
+    }
+  
+  //on fait le test pour z<-1
+  idx=where(a<-1.0);
+  if (numberof(idx)!=0)
+    {
+      z=-1.0*a(idx);
+      temp=-1.0*pi;
+      temp/=z;
+      temp/=sin(pi*z);
+      temp/=exp(lngamma(z));
+      result(idx)=temp;
+    }
+  
+  if (is_scalar(x))
+    return(result(1));
+  else
+    return(result);
+}
+func getCorrelationFactor(x,y)
+/* DOCUMENT r = getCorrelationFactor(x,y)
+
+   Returns the correlation factor between time series
+   of x and y.
+*/
+{
+  //Mean removal
+  x -= x(avg);
+  y -= y(avg);
+  N  = numberof(x);
+  //Estimation of xy variance
+  sxy = sum(x*y)/N;
+  //Estimation of x and y variance
+  sx  = sqrt(sum(x^2)/N);
+  sy  = sqrt(sum(y^2)/N);
+  //Correlation factor
+  return sxy/(sx*sy);
+
+}
 func getFWHM(g,Fe)
 {
 
@@ -231,6 +324,12 @@ func giveTomoMode(wfstype,OBS_MODE,RECTYPE)
 
   return TomoMode;
 }
+func logabs(arg)
+/* DOCUMENT
+ */
+{
+  return log(abs(arg));
+}
 func minmax(arg) 
 /* DOCUMENT minmax(arg)
  * Returns a vector containing the min and the max of the argument
@@ -239,6 +338,20 @@ func minmax(arg)
  */
 {
   return [min(arg),max(arg)];
+}
+func pistonRemoval(D,d,k,m,n)
+/* DOCUMENT PR = pistonRemoval(D,d,f,mi,ni)
+
+   Returns the piston filter on spatial PSD
+*/
+{
+  
+  Bx = pi*D*(k-m/d); 
+  By = pi*D*(k-n/d);
+  B  = abs(Bx,By);
+  F  = 2*bessj(1,B)/B;
+
+ return  1 - abs(F)^2;
 }
 func proportionalRegress(y,x)
 /*DOCUMENT alpha = proportionalRegress(y,x)
@@ -280,6 +393,19 @@ func SQRT(x)
 {
   if(x==[]) return 0.;
   return sqrt(abs(x)) * sign(x);
+}
+func sinc(ar)
+/* DOCUMENT sinc(ar)
+ * Return the sinus cardinal of the input array
+ * F.Rigaut, 2002/04/03
+ * SEE ALSO: Eric Thiebault wrote a sinc which is probably better.
+ */
+{
+  local ar;
+  ar = double(ar);
+  w  = where(abs(ar) < 1e-8);
+  if (is_array(w)) {ar(w) = 1e-8;}
+  return sin(ar)/ar;
 }
 func unbiasesMtFromSensitivities(mt)
 /*DOCUMENT
@@ -342,6 +468,42 @@ Fails for rectangular matrices.
   n = dimsof(Mat)(2);
   return Mat(*)(1::n+1);
 }
+func trapz(y,dx)
+/* DOCUMENT Y = trapz(y)
+   Returns the integral of y = f(x)
+   over [a-b] domain using the trapezoidal
+   approximation
+ */
+{
+  N    = dimsof(y)(1);
+  if(N == 1)
+    return dx*(sum(y) + (y(1) + y(0))/2.);
+  else
+    return dx*((y)(,sum) + (y(,1) + y(,0))/2.);
+}
+
+func simpsonIntegral(y,dx)
+/* DOCUMENT Y = trapz(y)
+   Returns the integral of y = f(x)
+   over [a-b] domain using the trapezoidal
+   approximation
+ */
+{
+  N    = dimsof(y)(1);
+  if(N == 1){
+    n  = numberof(y);
+    I  = y(1) + 2*sum(y(2:n-2:2)) + 4*sum(y(3:n-1:2)) + y(0);
+    I *= dx/3.;    
+  }else{
+    n  = dimsof(y)(0);
+    I  = y(,1) + 2*(y(,2:n-2:2))(,sum) + 4*(y(,3:n-1:2))(,sum) + y(,0);
+    I *= dx/3.; 
+  }
+
+  return I;
+}
+
+
 func where4Vector(w1,w2,notequal=)
 /*DOCUMENT
  */

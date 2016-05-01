@@ -1,66 +1,6 @@
 include, "pracMain.i";
+                  
 
-//00h14
-// r0              = 18.4 cm
-// L0              = 9.45 m
-// v               = 8.84 m/s
-// Sky  Strehl     = 29.9 %
-// TS   Strehl     = 29.6 %
-// Est. Strehl     = 31 %
-// RTC  Strehl     = 31.6 %
-// Sky  FWHM       = 90.17 mas
-// TS   FWHM       = 88.75 mas
-// Est. FWHM       = 90.44 mas
-// RTC  FWHM       = 90.32 mas
-// TS   Chi2       = 3.295
-// Est. Chi2       = 3.252
-// RTC  Chi2       = 3.446
-// Sky  Mof. prof. = [0.321, 1.73, 1.22]
-// TS   Mof. prof. = [0.336, 1.82, 1.35]
-// Est. Mof. prof. = [0.352, 2.09, 1.64]
-// RTC  Mof. prof. = [0.358, 2.16, 1.73]
-
-//00h15
-// r0              = 20.1 cm
-// L0              = 8.99 m
-// v               = 6.12 m/s
-// Sky  Strehl     = 24 %
-// TS   Strehl     = 22.5 %
-// Est. Strehl     = 22.4 %
-// RTC  Strehl     = 21.1 %
-// Sky  FWHM       = 106.6 mas
-// TS   FWHM       = 100.3 mas
-// Est. FWHM       = 98.54 mas
-// RTC  FWHM       = 101.1 mas
-// TS   Chi2       = 1.824
-// Est. Chi2       = 1.74
-// RTC  Chi2       = 1.808
-// Sky  Mof. prof. = [0.247, 2.06, 1.24]
-// TS   Mof. prof. = [0.246, 1.85, 1.15]
-// Est. Mof. prof. = [0.247, 1.81, 1.14]
-// RTC  Mof. prof. = [0.23, 1.82, 1.11]
-
-//00h16
-// r0              = 16.3 cm
-// L0              = 8.14 m
-// v               = 7.26 m/s
-// Sky  Strehl     = 16.7 %
-// TS   Strehl     = 15.7 %
-// Est. Strehl     = 14.4 %
-// RTC  Strehl     = 15.6 %
-// Sky  FWHM       = 128.1 mas
-// TS   FWHM       = 115.3 mas
-// Est. FWHM       = 117.3 mas
-// RTC  FWHM       = 112.4 mas
-// TS   Chi2       = 1.344
-// Est. Chi2       = 1.374
-// RTC  Chi2       = 1.351
-// Sky  Mof. prof. = [0.17, 2.43, 1.2]
-// TS   Mof. prof. = [0.164, 1.99, 1.04]
-// Est. Mof. prof. = [0.151, 1.99, 1.01]
-// RTC  Mof. prof. = [0.165, 1.92, 1.03]
-                   
-  
 func comparePSFRmethods(timedata,Dir=,disp=)
 /* DOCUMENT comparePSFRmethods,timedata,Dir="2013_09_13_onsky/"
 
@@ -70,29 +10,35 @@ func comparePSFRmethods(timedata,Dir=,disp=)
   res_est = pracMain(timedata,Dir=Dir,psfrMethod="estimation",disp=disp);
   res_rtc = pracMain(timedata,Dir=Dir,psfrMethod="rtc",disp=disp);
 
+  ///////////
+  // Relative Error on EE
+  ////////////////////////////////////////////////
+  
   EEsky  = (*res_ts(7))(,1);
   EEts   = (*res_ts(7))(,2);
   EEest  = (*res_est(7))(,2);
   EErtc  = (*res_rtc(7))(,2);
-
- 
-  // Relative Error on EE
+  EEtsdiff = 100*abs(EEts-EEsky)/EEsky;
+  EEestdiff = 100*abs(EEest-EEsky)/EEsky;
+  EErtcdiff = 100*abs(EErtc-EEsky)/EEsky;
   
   winkill,10;window,10,dpi=90,style="aanda.gs";
   logxy,1,0;gridxy,1,1;
   boxwidth = 1e3*span(1,cam.nPixelsCropped-3.,cam.nPixelsCropped) * cam.pixSize;
-  plg, 100*(EEts-EEsky)/EEsky,boxwidth;
-  plg, 100*(EEest-EEsky)/EEsky,boxwidth,color = [128,128,128];
-  plg, 100*(EErtc-EEsky)/EEsky,boxwidth,color = [100,100,100];
-  xytitles,"Integrated box width (mas)","Total EE error (%)";
-  plt,"A: TS-based  PSF",.5e3,-5,tosys=1;
-  plt,"B: Estimated PSF",.5e3,-6,tosys=1,color = [128,128,128];
-  plt,"C: RTC-based PSF",.5e3,-7,tosys=1,color = [100,100,100];
+  plg,EEtsdiff ,boxwidth;
+  plg,EEestdiff,boxwidth,color = [128,128,128];
+  plg,EErtcdiff,boxwidth,color = [100,100,100];
+  xytitles,"Integrated box width [mas]","Relative error on EE [%]";
+  m = max(max(EEtsdiff),max(EEestdiff),max(EErtcdiff));
+  plt,"A: TS-based  PSF",.5e3,.9*m,tosys=1;
+  plt,"B: Estimated PSF",.5e3,.8*m,tosys=1,color = [128,128,128];
+  plt,"C: RTC-based PSF",.5e3,.7*m,tosys=1,color = [100,100,100];
   pltitle,rtc.aoMode + " at " + timedata;
   pdf,"results/EEerror_" + timedata;
 
-
-  // Absolute Error on OTF
+  ///////////
+  //    OTF
+  ////////////////////////////////////////////////
   
   os   = (*res_ts(8))(,,1);
   ots  = (*res_ts(8))(,,2);
@@ -104,25 +50,62 @@ func comparePSFRmethods(timedata,Dir=,disp=)
   oest_avg = circularAveragePsf(oest);oest_avg/=max(oest_avg);
   ortc_avg = circularAveragePsf(ortc);ortc_avg/=max(ortc_avg);
 
-  ots_err  = ots_avg  - os_avg;
-  oest_err = oest_avg - os_avg;
-  ortc_err = ortc_avg - os_avg;
-  
   winkill,11;window,11,style="aanda.gs",dpi=90;clr;
   dl =  (indgen(cam.nPixelsCropped/2) * tel.foV/tel.nPixels);
   n = numberof(dl);gridxy,1,1;
-  plg, ots_err(1:n/2+5),dl(1:n/2+5);
-  plg, oest_err(1:n/2+5),dl(1:n/2+5);
-  plg, ortc_err(1:n/2+5),dl(1:n/2+5);
-  xytitles,"!r/D","Absolute OTF error ";
-  plt,"A: TS-based  OTF",.5,-.03,tosys=1;
-  plt,"B: Estimated OTF",.5,-.04,tosys=1,color = [128,128,128];
-  plt,"C: RTC-based OTF",.5,-.05,tosys=1,color = [100,100,100];
+  plg, 10*log10(abs(os_avg)),dl,type=2;
+  plg, 10*log10(abs(ots_avg)),dl;
+  plg, 10*log10(abs(oest_avg)),dl;
+  plg, 10*log10(abs(ortc_avg)),dl;
+  xytitles,"Normalized frequency [D/!l units]","Circularly averaged OTF [dB]";
+  limits,-.1,1.;range,-30,.1;
+  plt,"A: Sky OTF",0,-10,tosys=1;
+  plt,"B: TS-based  OTF",0,-14,tosys=1;
+  plt,"C: Estimated OTF",0,-16,tosys=1,color = [128,128,128];
+  plt,"D: RTC-based OTF",0,-18,tosys=1,color = [100,100,100];
   pltitle,rtc.aoMode + " at " + timedata;
   
   pdf,"results/OTFerror_" + timedata;
+
+  ///////////
+  //    PSF
+  ////////////////////////////////////////////////
   
+  os   = (*res_ts(6))(,,1);
+  ots  = (*res_ts(6))(,,2);
+  oest = (*res_est(6))(,,2);
+  ortc = (*res_rtc(6))(,,2);
+   
+  //os_avg   = circularAveragePsf(os);//os_avg/=max(os_avg);
+  ots_avg  = circularAveragePsf(ots-os);//ots_avg/=max(ots_avg);
+  oest_avg = circularAveragePsf(oest-os);//oest_avg/=max(oest_avg);
+  ortc_avg = circularAveragePsf(ortc-os);//ortc_avg/=max(ortc_avg);
+
+  winkill,13;window,13,style="aanda.gs",dpi=90;clr;
+  dl     = span(1,cam.nPixelsCropped/2,cam.nPixelsCropped/2) * cam.pixSize;
+  n      = numberof(dl);gridxy,1,1;
+  difts  = 10*log10(abs(ots_avg));
+  difest = 10*log10(abs(oest_avg));
+  difrtc = 10*log10(abs(ortc_avg));
+  plg, difts, dl,type=2;
+  plg, difest,dl,color = [128,128,128];
+  plg, difrtc,dl,color = [100,100,100];
+  xytitles,"Angular distance from center [arcsec]","Reconstruction absolute residue [dB]";
+  w = where(dl<=.8);
+  m = max(max(difts(w)),max(difest(w)),max(difrtc(w)));
+  limits,-.1,.8;//range,0,1.05*m;
+  //plt,"A: Sky PSF (dashed line)",0.4,-5,tosys=1;
+  plt,"A: TS-based  PSF (dashed line)",0.4,-25,tosys=1;
+  plt,"B: Estimated PSF",0.4,-30,tosys=1,color = [128,128,128];
+  plt,"C: RTC-based PSF",0.4,-35,tosys=1,color = [100,100,100];
+  pltitle,rtc.aoMode + " at " + timedata;
+  
+  pdf,"results/PSFerror_" + timedata;
+  
+
+  ///////////
   // Scalar results on performance
+  ////////////////////////////////////////////////
 
   write,format="r0              = %.3g cm\n", 100*(*res_ts(2))(1);
   write,format="L0              = %.3g m\n", (*res_ts(2))(2);
@@ -142,22 +125,25 @@ func comparePSFRmethods(timedata,Dir=,disp=)
   write,format="Est. Chi2       = %.4g\n", (*res_est(11))(13);
   write,format="RTC  Chi2       = %.4g\n", (*res_rtc(11))(13);
 
-  write,format="Sky  Mof. prof. = [%.3g, %.3g, %.3g]\n",(*res_ts(12))(1,1),(*res_ts(12))(2,1),(*res_ts(12))(3,1);
-  write,format="TS   Mof. prof. = [%.3g, %.3g, %.3g]\n", (*res_ts(12))(1,2),(*res_ts(12))(2,2),(*res_ts(12))(3,2);
-  write,format="Est. Mof. prof. = [%.3g, %.3g, %.3g]\n",(*res_est(12))(1,2),(*res_est(12))(2,2),(*res_est(12))(3,2);
-  write,format="RTC  Mof. prof. = [%.3g, %.3g, %.3g]\n", (*res_rtc(12))(1,2),(*res_rtc(12))(2,2),(*res_rtc(12))(3,2);
+  write,format="Sky  Mof. prof. = [%.3g, %.3g, %.3g,%.3g,%.3g]\n",(*res_ts(12))(1,1),(*res_ts(12))(2,1),(*res_ts(12))(3,1),(*res_ts(12))(4,1),(*res_ts(12))(5,1);
+  write,format="TS   Mof. prof. = [%.3g, %.3g, %.3g,%.3g,%.3g]\n", (*res_ts(12))(1,2),(*res_ts(12))(2,2),(*res_ts(12))(3,2),(*res_ts(12))(4,2),(*res_ts(12))(5,2);
+  write,format="Est. Mof. prof. = [%.3g, %.3g, %.3g,%.3g,%.3g]\n",(*res_est(12))(1,2),(*res_est(12))(2,2),(*res_est(12))(3,2),(*res_est(12))(4,2),(*res_est(12))(5,2);
+  write,format="RTC  Mof. prof. = [%.3g, %.3g, %.3g,%.3g,%.3g]\n", (*res_rtc(12))(1,2),(*res_rtc(12))(2,2),(*res_rtc(12))(3,2),(*res_rtc(12))(4,2),(*res_rtc(12))(5,2);
 
+  ////////
   // Moffat profile
+  ////////////////////////////////////////////////
+
   winkill,12;window,12,style="aanda.gs",dpi=90;clr;
   gridxy,1,1;
-  y1  = (*res_ts(12))(,1);
-  y2  = (*res_ts(12))(,2);
-  y3  = (*res_est(12))(,2);
-  y4  = (*res_rtc(12))(,2);
-  tab = [y1,y2,y3,y4];
-  multiBarDiagram,tab,["I_0","!a","!b"];
-  xytitles," ","Moffat parameters";
-  plt,"Sky PSF",.2,max(tab),tosys=1,color=[192,192,192];
+  y1  = (*res_ts(12))(1:-1,1);
+  y2  = (*res_ts(12))(1:-1,2);
+  y3  = (*res_est(12))(1:-1,2);
+  y4  = (*res_rtc(12))(1:-1,2);
+  tab = [100*abs((y2-y1)/y1),100*abs((y3-y1)/y1),100*abs((y4-y1)/y1)];
+  multiBarDiagram,tab,["I_0","!a_x","!a_y","!b"];
+  xytitles," ","Relative error on Moffat parameters [%]";
+  //plt,"Sky PSF",.2,max(tab),tosys=1,color=[192,192,192];
   plt,"TS-based PSF",.2,max(tab)*.9,tosys=1,color=[128,128,128];
   plt,"Estimated PSF",.2,max(tab)*.8,tosys=1,color=[96,96,96];
   plt,"RTC-based PSF",.2,max(tab)*.7,tosys=1,color=[64,64,64];
@@ -191,7 +177,7 @@ func pracAll(method)
   //Dir  = listFile(dataDir);
   //Dir  = Dir(sort(Dir));
   //  Dir  = Dir(17:21);
-  Dir = ["2013_09_13_onsky","2013_09_16_onsky","2013_09_15_onsky","2013_09_18_onsky", "2013_09_17_onsky"];
+  Dir = ["2013_09_13_onsky","2013_09_15_onsky","2013_09_16_onsky","2013_09_17_onsky","2013_09_18_onsky"];
 
   ndir = numberof(Dir);
   
@@ -212,13 +198,7 @@ func pracAll(method)
           //extracts the date
           timetl = extractTime(pathstl(j));
           mode   = strcase(1,readFitsKey(pathstl(j),"OBS_MODE"));
-          
-          if(method == "rtc" && mode == "SCAO"){
-            continue;
-          }else{
-            p = pracMain(timetl,Dir=procDir,verb=0,disp=0,psfrMethod=method,writeRes=1);
-          }
-
+          p = pracMain(timetl,Dir=procDir,verb=0,disp=0,psfrMethod=method,writeRes=1);
           write,format="%s","Job done: " + var2str(100.*j/ntl) + "%\r";
         }
     }
@@ -234,73 +214,294 @@ func pracAll(method)
                                                     
 */
 
-func statisticsOnSR(method,aomode,all=)
-/* DOCUMENT statisticsOnSR,"analytic",[],all=1
+func psfrHistogram(void)
+/* DOCUMENT
  */
 {
-
   include,"pracConfig.i",1;
-
-  savingDir  = "results/pracResults/resultsWith" + method + "_Vii_Method/"
+  savingDir  = "results/pracResults/resultsWithestimation_Vii_Method/";
   list       = listFile(savingDir);
-  nfile      = numberof(list);
+  nfile      = numberof(list);  
+  obsmode = SR_sky = SR_est = [];
+  chiest = chits = chirtc = [];
+  I0est = axest = ayest = best = thest =  [];
+  I0sky = axsky = aysky = bsky = thsky =  [];
   
-  obsmode = SR_sky = SR_res = [];
   for(i=1;i<=nfile;i++){
     //loading results
     p = readfits(savingDir + list(i));
     //grabbing aomode
     mode = strchar(*p(1))(2);
-
-    if(mode == aomode || all == 1){
-      obsmode = grow(obsmode,mode);
-      //grabbing the Strehl ratios
-      SR_sky = grow(SR_sky,(*p(11))(1));
-      SR_res = grow(SR_res,(*p(11))(2)) ;
-      write,format="Files grabbed :%.3g%s\r",100.*i/nfile,"%";
-    }
+    obsmode = grow(obsmode,mode);
+    //grabbing the Strehl ratios
+    SR_sky = grow(SR_sky,(*p(11))(1));
+    SR_est = grow(SR_est,(*p(11))(2)) ;
+    chiest = grow(chiest,(*p(11))(13)) ;
+    I0sky    = grow(I0sky,(*p(12))(1,1));
+    I0est    = grow(I0est,(*p(12))(1,2));
+    axsky     = grow(axsky,(*p(12))(2,1));
+    axest     = grow(axest,(*p(12))(2,2));
+    aysky     = grow(aysky,(*p(12))(3,1));
+    ayest     = grow(ayest,(*p(12))(3,2));
+    bsky      = grow(bsky,(*p(12))(4,1));
+    best      = grow(best,(*p(12))(4,2));
+    thsky     = grow(thsky,(*p(12))(5,1));
+    thest     = grow(thest,(*p(12))(5,2));
+    write,format="Files grabbed :%.3g%s\r",100.*i/nfile,"%";
   }
 
-  //mode = sortLabel(obsmode);
-  mode = ["SCAO","MOAO4L3N","MOAO3N","MOAO4L3T","GLAO"];
-  c  = ["black","red","blue","magenta","green"];
-  m = max(max(SR_res),max(SR_sky));
-  winkill,0;window,0,dpi=90,style="aanda.gs";
-
-  for(j=1;j<=numberof(mode);j++){
-    if(mode(j) != "GLAO")
-      w = where(obsmode == mode(j));
-    else
-      w = where(strpart(obsmode,1:4) == mode(j));
-    
-    if(is_array(w)){
-      plmk, SR_res(w),SR_sky(w),marker = j,msize=.2,width = 10,color=c(j);
-      plt,mode(j),5,(1-j/10.)*m,color=c(j),tosys=1;
-    }
+  savingDir  = "results/pracResults/resultsWithts_Vii_Method/";
+  list       = listFile(savingDir);
+  nfile      = numberof(list);  
+  SR_ts= I0ts = axts =  ayts = bts = thts =  [];
+  for(i=1;i<=nfile;i++){
+    //loading results
+    p = readfits(savingDir + list(i));
+    SR_ts = grow(SR_ts,(*p(11))(2)) ;
+    chits = grow(chits,(*p(11))(13)) ;
+    I0ts    = grow(I0ts,(*p(12))(1,2));
+    axts     = grow(axts,(*p(12))(2,2));
+    ayts     = grow(ayts,(*p(12))(3,2));
+    bts      = grow(bts,(*p(12))(4,2));
+    thts     = grow(thts,(*p(12))(5,2));
+    write,format="Files grabbed :%.3g%s\r",100.*i/nfile,"%";
   }
+
+  savingDir  = "results/pracResults/resultsWithrtc_Vii_Method/";
+  list       = listFile(savingDir);
+  nfile      = numberof(list);  
+  SR_rtc = I0rtc = axrtc = ayrtc = brtc = thrtc =  [];
+  for(i=1;i<=nfile;i++){
+    //loading results
+    p = readfits(savingDir + list(i));
+    SR_rtc = grow(SR_rtc,(*p(11))(2)) ;
+    chirtc = grow(chirtc,(*p(11))(13)) ;
+    I0rtc    = grow(I0rtc,(*p(12))(1,2));
+    axrtc     = grow(axrtc,(*p(12))(2,2));
+    ayrtc     = grow(ayrtc,(*p(12))(3,2));
+    brtc      = grow(brtc,(*p(12))(4,2));
+    thrtc     = grow(thrtc,(*p(12))(5,2));
+    write,format="Files grabbed :%.3g%s\r",100.*i/nfile,"%";
+  }
+
+  ///////
+  // Strehl
+  ////////////////////////////////////////
   
-  plg, [0,m],[0,m],marks=0,type=2;
-  xytitles,"Sky Strehl ratio in H","Reconstructed Strehl ratio";
-  limits,-1,m*1.05;
-  range,-1,m*1.05;
+  nc = 5;
+  difSRts  = 100*(SR_ts -SR_sky)/SR_sky;
+  w = where(chits <nc & abs(difSRts) < 100);
+  difSRts =  difSRts(w);
+  difSRest = 100*(SR_est-SR_sky)/SR_sky;
+  w = where(chiest <nc & abs(difSRest) < 100);
+  difSRest =  difSRest(w);
+  difSRrtc = 100*(SR_rtc-SR_sky)/SR_sky;
+  w = where(chirtc <nc & abs(difSRrtc) < 100);
+  difSRrtc =  difSRrtc(w);
+  // Histograms
+  n = 20;
+  winkill,1;window,1,dpi=90,style="aanda.gs";gridxy,1,1;
+  histo,difSRts,n;
+  histo,difSRest,n,color="blue";
+  histo,difSRrtc,n,color="red";
+  xytitles,"Total error on Strehl [%]","Counts";
+  m = limits();
+  plt,"A: TS-based method",.45*m(2),.9*m(4),tosys=1;
+  plt,"B: Estimation method",.45*m(2),.8*m(4),color="blue",tosys=1;
+  plt,"C: RTC-based method",.45*m(2),.7*m(4),color="red",tosys=1;
+  pdf,"results/statistics/strehlHistogram";
   
- meth = "Estimation method";
-  if(method == "ls")
-    meth = "TS-based method";
-  else if(method == "rtc")
-    meth = "RTC-based method";
-    
-  if(is_string(aomode)){
-    pltitle, meth + " in " +  aomode;
-    pdf,"results/srReconstructionIn" + aomode + "_" + method;
-  }else{
-    pltitle, meth;
-    pdf,"results/statistics/srReconstructionInAllAoModes" + "_" + method;
-  }
+  ///////
+  // Moffat I0
+  ////////////////////////////////////////
+  
+  difI0ts  = 100*(I0ts -I0sky)/I0sky;
+  w = where(chits <nc & abs(difI0ts) < 100);
+  difI0ts =  difI0ts(w);
+  difI0est = 100*(I0est-I0sky)/I0sky;
+  w = where(chiest <nc & abs(difI0est) < 100);
+  difI0est =  difI0est(w);
+  difI0rtc = 100*(I0rtc-I0sky)/I0sky;
+  w = where(chirtc <nc & abs(difI0rtc) < 100);
+  difI0rtc =  difI0rtc(w);
+  // Histograms
+  n = 20;
+  winkill,2;window,2,dpi=90,style="aanda.gs";gridxy,1,1;
+  histo,difI0ts,n;
+  histo,difI0est,n,color="blue";
+  histo,difI0rtc,n,color="red";
+  xytitles,"Total error on I_0_ [%]","Counts";
+  m = limits();
+  plt,"A: TS-based method",.45*m(2),.9*m(4),tosys=1;
+  plt,"B: Estimation method",.45*m(2),.8*m(4),color="blue",tosys=1;
+  plt,"C: RTC-based method",.45*m(2),.7*m(4),color="red",tosys=1;
+  pdf,"results/statistics/I0Histogram";
+
+  ///////
+  // Moffat alpha x
+  ////////////////////////////////////////
+
+  difaxts  = 100*(axts -axsky)/axsky;
+  w = where(chits <nc & abs(difaxts) < 100);
+  difaxts =  difaxts(w);
+  difaxest = 100*(axest-axsky)/axsky;
+  w = where(chiest <nc & abs(difaxest) < 100);
+  difaxest =  difaxest(w);
+  difaxrtc = 100*(axrtc-axsky)/axsky;
+  w = where(chirtc <nc & abs(difaxrtc) < 100);
+  difaxrtc =  difaxrtc(w);
+  // Histograms
+  n = 20;
+  winkill,3;window,3,dpi=90,style="aanda.gs";gridxy,1,1;
+  histo,difaxts,n;
+  histo,difaxest,n,color="blue";
+  histo,difaxrtc,n,color="red";
+  xytitles,"Total error on !a_x [%]","Counts";
+  m = limits();
+  plt,"A: TS-based method",.45*m(2),.9*m(4),tosys=1;
+  plt,"B: Estimation method",.45*m(2),.8*m(4),color="blue",tosys=1;
+  plt,"C: RTC-based method",.45*m(2),.7*m(4),color="red",tosys=1;
+  pdf,"results/statistics/alphaHistogram";
+
+  ///////
+  // Moffat alpha y
+  ////////////////////////////////////////
+
+  difayts  = 100*(ayts -aysky)/aysky;
+  w = where(chits <nc & abs(difayts) < 100);
+  difayts =  difayts(w);
+  difayest = 100*(ayest-aysky)/aysky;
+  w = where(chiest <nc & abs(difayest) < 100);
+  difayest =  difayest(w);
+  difayrtc = 100*(ayrtc-aysky)/aysky;
+  w = where(chirtc <nc & abs(difayrtc) < 100);
+  difayrtc =  difayrtc(w);
+  // Histograms
+  n = 20;
+  winkill,4;window,4,dpi=90,style="aanda.gs";gridxy,1,1;
+  histo,difayts,n;
+  histo,difayest,n,color="blue";
+  histo,difayrtc,n,color="red";
+  xytitles,"Total error on !a_y [%]","Counts";
+  m = limits();
+  plt,"A: TS-based method",.45*m(2),.9*m(4),tosys=1;
+  plt,"B: Estimation method",.45*m(2),.8*m(4),color="blue",tosys=1;
+  plt,"C: RTC-based method",.45*m(2),.7*m(4),color="red",tosys=1;
+  pdf,"results/statistics/alphaYHistogram";
+  
+
+  ///////
+  // Moffat beta
+  ////////////////////////////////////////
+
+  difbts  = 100*(bts -bsky)/bsky;
+  w = where(chits <nc & abs(difbts) < 100);
+  difbts =  difbts(w);
+  difbest = 100*(best-bsky)/bsky;
+  w = where(chiest <nc & abs(difbest) < 100);
+  difbest =  difbest(w);
+  difbrtc = 100*(brtc-bsky)/bsky;
+  w = where(chirtc <nc & abs(difbrtc) < 100);
+  difbrtc =  difbrtc(w);
+  // Histograms
+  n = 20;
+  winkill,5;window,5,dpi=90,style="aanda.gs";gridxy,1,1;
+  histo,difbts,n;
+  histo,difbest,n,color="blue";
+  histo,difbrtc,n,color="red";
+  xytitles,"Total error on !b [%]","Counts";
+  m = limits();
+  plt,"A: TS-based method",.45*m(2),.9*m(4),tosys=1;
+  plt,"B: Estimation method",.45*m(2),.8*m(4),color="blue",tosys=1;
+  plt,"C: RTC-based method",.45*m(2),.7*m(4),color="red",tosys=1;
+  pdf,"results/statistics/betaHistogram";
+
+  /*
+  ///////
+  // Moffat theta
+  ////////////////////////////////////////
+
+  difthts  = 100*(thts -thsky)/thsky;
+  w = where(chits <nc & abs(difthts) < 200);
+  difthts =  difthts(w);
+  difthest = 100*(thest-thsky)/thsky;
+  w = where(chiest <nc & abs(difthest) < 200);
+  difthest =  difthest(w);
+  difthrtc = 100*(thrtc-thsky)/thsky;
+  w = where(chirtc <nc & abs(difthrtc) < 200);
+  difthrtc =  difthrtc(w);
+  // Histograms
+  n = 15;
+  winkill,6;window,6,dpi=90,style="aanda.gs";
+  histo,difthts,n;
+  histo,difthest,n,color="blue";
+  histo,difthrtc,n,color="red";
+  xytitles,"Total error on !q [%]","Counts";
+  pdf,"results/statistics/thetaHistogram";
+  */
+
+  ///////////////////
+  // STATISTICS ON RECONSTRUCTION
+  ////////////////////////////////////////////////
+
+  write,format="Average on RTC-based SR diff: %.3g\n", difSRrtc(avg);
+  write,format="1-sigma on RTC-based SR diff: %.3g\n", difSRrtc(rms);
+  write,format="Correlation on RTC-based SR : %.3g\n", getCorrelationFactor(SR_rtc,SR_sky)
+  write,format="Average on Estimated SR diff: %.3g\n", difSRest(avg);
+  write,format="1-sigma on Estimated SR diff: %.3g\n", difSRest(rms);
+  write,format="Correlation on Estimated SR : %.3g\n", getCorrelationFactor(SR_ts,SR_sky)
+  write,format="Average on TS-based  SR diff: %.3g\n", difSRts(avg); 
+  write,format="1-sigma on TS-based  SR diff: %.3g\n", difSRts(rms);
+  write,format="Correlation on TS-based SR  : %.3g\n \n", getCorrelationFactor(SR_est,SR_sky)
+                    
+
+  
+  write,format="Average on RTC-based I0 diff: %.3g\n", difI0rtc(avg);
+  write,format="1-sigma on RTC-based I0 diff: %.3g\n", difI0rtc(rms);
+  write,format="Correlation on RTC-based I0 : %.3g\n", getCorrelationFactor(I0rtc,I0sky)
+  write,format="Average on Estimated I0 diff: %.3g\n", difI0est(avg);
+  write,format="1-sigma on Estimated I0 diff: %.3g\n", difI0est(rms);
+  write,format="Correlation on Estimated I0 : %.3g\n", getCorrelationFactor(I0est,I0sky)
+  write,format="Average on TS-based  I0 diff: %.3g\n", difI0ts(avg);  
+  write,format="1-sigma on TS-based  I0 diff: %.3g\n", difI0ts(rms);
+  write,format="Correlation on TS-based I0 : %.3g\n \n", getCorrelationFactor(I0ts,I0sky)
+
+  write,format="Average on RTC-based ax diff: %.3g\n", difaxrtc(avg);
+  write,format="1-sigma on RTC-based ax diff: %.3g\n", difaxrtc(rms);
+  write,format="Correlation on RTC-based ax : %.3g\n", getCorrelationFactor(axrtc,axsky)
+  write,format="Average on Estimated ax diff: %.3g\n", difaxest(avg);
+  write,format="1-sigma on Estimated ax diff: %.3g\n", difaxest(rms);
+  write,format="Correlation on Estimated ax : %.3g\n", getCorrelationFactor(axest,axsky)
+  write,format="Average on TS-based  ax diff: %.3g\n", difaxts(avg);
+  write,format="1-sigma on TS-based  ax diff: %.3g\n", difaxts(rms);
+  write,format="Correlation on TS-based ax : %.3g\n \n", getCorrelationFactor(axts,axsky)
+
+  write,format="Average on RTC-based ay diff: %.3g\n", difayrtc(avg);
+  write,format="1-sigma on RTC-based ay diff: %.3g\n", difayrtc(rms);
+  write,format="Correlation on RTC-based ay : %.3g\n", getCorrelationFactor(ayrtc,aysky)
+  write,format="Average on Estimated ay diff: %.3g\n", difayest(avg);
+  write,format="1-sigma on Estimated ay diff: %.3g\n", difayest(rms);
+  write,format="Correlation on Estimated ay : %.3g\n", getCorrelationFactor(ayest,aysky)
+  write,format="Average on TS-based  ay diff: %.3g\n", difayts(avg);
+  write,format="1-sigma on TS-based  ay diff: %.3g\n", difayts(rms);
+  write,format="Correlation on TS-based ay : %.3g\n \n", getCorrelationFactor(ayts,aysky)
+
+
+  write,format="Average on RTC-based be diff: %.3g\n", difbrtc(avg);
+  write,format="1-sigma on RTC-based be diff: %.3g\n", difbrtc(rms);
+  write,format="Correlation on RTC-based be : %.3g\n", getCorrelationFactor(brtc,bsky)
+  write,format="Average on Estimated be diff: %.3g\n", difbest(avg);
+  write,format="1-sigma on Estimated be diff: %.3g\n", difbest(rms);
+  write,format="Correlation on Estimated be : %.3g\n", getCorrelationFactor(best,bsky)
+  write,format="Average on TS-based  be diff: %.3g\n", difbts(avg);
+  write,format="1-sigma on TS-based  be diff: %.3g\n", difbts(rms);
+  write,format="Correlation on TS-based be : %.3g\n", getCorrelationFactor(bts,bsky)
+
+  
 }
 
-func statisticsOnFWHM(method,aomode,all=)
-/* DOCUMENT statisticsOnFWHM,"analytic",[],all=1
+func statisticsOnPSFR(method,aomode,all=)
+/* DOCUMENT statisticsOnPSFR,"ts",[],all=1
  */
 {
 
@@ -312,7 +513,9 @@ func statisticsOnFWHM(method,aomode,all=)
   pixSize    = 0.0297949;
   //pixSize   *= 128./512.;
   
-  obsmode = FWHM_sky = FWHM_res = [];
+  obsmode = FWHM_sky = FWHM_res = chi2 = r0 =[];
+  I0sky = I0res = ares = asky = bres=bsky = [];
+  SR_sky = SR_res = [];
   os = or = array(0.,512,512);
   N  = 128;
   xi = 256-N/2+1;
@@ -322,50 +525,102 @@ func statisticsOnFWHM(method,aomode,all=)
     //loading results
     p = readfits(savingDir + list(i));
     //grabbing aomode
-    mode = strchar(*p(1))(2);
+    mode = strpart(strchar(*p(1))(2),1:4);
 
     if(mode == aomode || all == 1){
       obsmode = grow(obsmode,mode);
-      //FWHM_sky = grow(FWHM_sky,(*p(11))(14));
-      //FWHM_res = grow(FWHM_res,(*p(11))(13)) ;
-      //grabbing PSFs
-      ps = (*p(6))(,,1);
-      pr = (*p(6))(,,2);
-
-      /*
-      //grabbing OTFs
-      otfSky = (*p(8))(,,1);
-      otfRes = (*p(8))(,,2);
-      os(xi:xf,xi:xf) = otfSky;
-      or(xi:xf,xi:xf) = otfRes;
-      ps = roll(fft(roll(os)).re);
-      pr = roll(fft(roll(or)).re);
-      ps/=max(ps);pr/=max(pr);v
-      */
-      //computing FWHM
-      FWHM_sky = grow(FWHM_sky,1e3*getPsfFwhm(ps,pixSize,fit=0));
-      FWHM_res = grow(FWHM_res,1e3*getPsfFwhm(pr,pixSize,fit=0)) ;
-      
+      SR_sky = grow(SR_sky,(*p(11))(1));
+      SR_res = grow(SR_res,(*p(11))(2)) ;
+      FWHM_sky = grow(FWHM_sky,(*p(11))(11));
+      FWHM_res = grow(FWHM_res,(*p(11))(12)) ;
+      chi2     = grow(chi2,(*p(11))(13)) ;
+      r0       = grow(r0,(*p(2))(1));
+      I0sky    = grow(I0sky,(*p(12))(1,1));
+      I0res    = grow(I0res,(*p(12))(1,2));
+      asky     = grow(asky,(*p(12))(2,1));
+      ares     = grow(ares,(*p(12))(2,2));
+      bsky     = grow(bsky,(*p(12))(3,1));
+      bres     = grow(bres,(*p(12))(3,2));
+                      
       write,format="Files grabbed :%.3g%s\r",100.*i/nfile,"%";
     }
   }
+  nc       = 50;
+  w        = where(chi2 <=nc);
+  obsmode  = obsmode(w);
+  SR_sky   = 100*SR_sky(w);
+  SR_res   = 100*SR_res(w);
+  FWHM_sky = FWHM_sky(w);
+  FWHM_res = FWHM_res(w);
+  chi2     = chi2(w);  
+  r0       = r0(w);
+  I0sky    = I0sky(w);
+  I0res    = I0res(w);
+  asky     = asky(w);
+  ares     = ares(w);
+  bsky     = bsky(w);
+  bres     = bres(w);
 
+  a = sort(SR_sky);
+  SR_sky = SR_sky(a);
+  SR_res = SR_res(a);
   //mode = sortLabel(obsmode);
-  mode = ["SCAO","MOAO4L3N","MOAO3N","MOAO4L3T","GLAO"];
-  c  = ["black","red","blue","magenta","green"];
-  w = where(FWHM_sky < 120.  & FWHM_res < 120. & FWHM_sky>0 & FWHM_res > 0);
+  mode = ["SCAO","MOAO","GLAO"];
+  c  = ["black","red","blue"];
+  
+  winkill,0;window,0,dpi=90,style="aanda.gs";
+  m = max(max(SR_res),max(SR_sky));
+ 
+  for(j=1;j<=numberof(mode);j++){
+    w = where(strpart(obsmode,1:4) == mode(j));
+    ns       = numberof(w);
+    if(is_array(w)){
+      coeff = proportionalRegress(SR_res(w),SR_sky(w));
+      rho   = getCorrelationFactor(SR_res(w),SR_sky(w));
+      plmk, SR_res(w),SR_sky(w),marker = j,msize=.2,width = 10,color=c(j);
+     
+      plt,mode(j) + " ("+var2str(ns) +" samples): " +var2str(arrondi(100*rho,1)) + "% of correlation",2,(.9-j/10.)*m,color=c(j),tosys=1;
+      plg,coeff*SR_sky,SR_sky,marks=0,type=2,width=4,color=c(j);
+    }
+  }
+  
+  xytitles,"H-band Sky Strehl ratio [%]","Reconstructed Strehl ratio [%]";
+  gridxy,1,1;
+  limits,0,m*1.05;
+  range,0,m*1.05;
+
+  meth = "Estimation method";
+  if(method == "ts")
+    meth = "TS-based method";
+  else if(method == "rtc")
+    meth = "RTC-based method";
+    
+  if(is_string(aomode)){
+    pltitle, meth + " in " +  aomode;
+    pdf,"results/srReconstructionIn" + aomode + "_" + method;
+  }else{
+    pltitle, meth;
+    pdf,"results/statistics/srReconstructionInAllAoModes" + "_" + method;
+  }
+  
+  
+  //////
+  // FWHM
+  ///////////////////////////
+  
+  FWHM_sky = FWHM_sky*1e3;
+  FWHM_res = FWHM_res*1e3;
+  
+  w = where(FWHM_sky < 200.  & FWHM_res < 200. & FWHM_sky>0 & FWHM_res > 0);
   FWHM_res = FWHM_res(w);
   FWHM_sky = FWHM_sky(w);
   obsmode  = obsmode(w);
   m = max(max(FWHM_res),max(FWHM_sky));
   n = min(min(FWHM_res),min(FWHM_sky));
-  winkill,0;window,0,dpi=90,style="aanda.gs";
+  winkill,1;window,1,dpi=90,style="aanda.gs";
 
   for(j=1;j<=numberof(mode);j++){
-    if(mode(j) != "GLAO")
-      w = where(obsmode == mode(j));
-    else
-      w = where(strpart(obsmode,1:4) == mode(j));
+    w = where(strpart(obsmode,1:4) == mode(j));
     
     if(is_array(w)){
       plmk, FWHM_res(w),FWHM_sky(w),marker = j,msize=.2,width = 10,color=c(j);
@@ -373,18 +628,11 @@ func statisticsOnFWHM(method,aomode,all=)
     }
   }
   
-  
   plg, [n,m],[n,m],marks=0,type=2;
   xytitles,"Sky FWHM in H (mas)","Reconstructed FWHM (mas)";
   limits,n*.95,m*1.05;
   range,n*.95,m*1.05;
-  
- meth = "Estimation method";
-  if(method == "ls")
-    meth = "TS-based method";
-  else if(method == "rtc")
-    meth = "RTC-based method";
-    
+     
   if(is_string(aomode)){
     pltitle, meth + " in " +  aomode;
     pdf,"results/fwhmReconstructionIn" + aomode + "_" + method;
@@ -392,6 +640,88 @@ func statisticsOnFWHM(method,aomode,all=)
     pltitle, meth;
     pdf,"results/statistics/fwhmReconstructionInAllAoModes" + "_" + method;
   }
+
+  /*
+  //////
+  // Chi2
+  ///////////////////////////
+  winkill,2;window,2,dpi=90,style="aanda.gs";
+  for(j=1;j<=numberof(mode);j++){
+    if(mode(j) != "GLAO")
+      w = where(obsmode == mode(j));
+    else
+      w = where(strpart(obsmode,1:4) == mode(j));
+    
+    if(is_array(w)){
+      plmk, chi2(w),0.103/r0(w),marker = j,msize=.2,width = 10,color=c(j);
+      plt,mode(j),.85*m,(1-j/10.)*m,color=c(j),tosys=1;
+    }
+  }
+  xytitles,"Seeing (arcsec)","!c^2";
+  limits,0,1.5;range,0,nc*1.05;
+  if(is_string(aomode)){
+    pltitle, meth + " in " +  aomode;
+    pdf,"results/chi2In" + aomode + "_" + method;
+  }else{
+    pltitle, meth;
+    pdf,"results/statistics/chi2InAllAoModes" + "_" + method;
+  }
+
+  //////
+  // Moffat
+  ///////////////////////////
+  winkill,3;window,3,dpi=90,style="aanda.gs";
+  for(j=1;j<=numberof(mode);j++){
+    if(mode(j) != "GLAO")
+      w = where(obsmode == mode(j));
+    else
+      w = where(strpart(obsmode,1:4) == mode(j));
+    
+    if(is_array(w)){
+      plmk, I0res(w),I0sky(w),marker = j,msize=.2,width = 10,color=c(j);
+      plt,mode(j),.85*m,(1-j/10.)*m,color=c(j),tosys=1;
+    }
+  }
+  xytitles,"Sky I_0_","Reconstructed I_0_";
+  range,0,.5;limits,0,.5;
+  m = max(max(I0sky),max(I0res));
+  plg, [0,m],[0,m],marks=0,type=2;
+   
+  winkill,4;window,4,dpi=90,style="aanda.gs";
+  for(j=1;j<=numberof(mode);j++){
+    if(mode(j) != "GLAO")
+      w = where(obsmode == mode(j));
+    else
+      w = where(strpart(obsmode,1:4) == mode(j));
+    
+    if(is_array(w)){
+      plmk, ares(w),asky(w),marker = j,msize=.2,width = 10,color=c(j);
+      plt,mode(j),.85*m,(1-j/10.)*m,color=c(j),tosys=1;
+    }
+  }
+  xytitles,"Sky !a","Reconstructed !a";
+  range,0,10.;limits,0,10.;
+  m = max(max(asky),max(ares));
+  plg, [0,m],[0,m],marks=0,type=2;
+
+  
+  winkill,5;window,5,dpi=90,style="aanda.gs";
+  for(j=1;j<=numberof(mode);j++){
+    if(mode(j) != "GLAO")
+      w = where(obsmode == mode(j));
+    else
+      w = where(strpart(obsmode,1:4) == mode(j));
+    
+    if(is_array(w)){
+      plmk, bres(w),bsky(w),marker = j,msize=.2,width = 10,color=c(j);
+      plt,mode(j),.85*m,(1-j/10.)*m,color=c(j),tosys=1;
+    }
+  }
+  xytitles,"Sky !b","Reconstructed !b";
+  range,0,4;limits,0.8,1.8;
+  m = max(max(bsky),max(bres));
+  plg, [0,m],[0,m],marks=0,type=2;
+  */
 }
 
 func statisticsOnEE(method,aomode,n,all=)
@@ -559,19 +889,19 @@ func plotProfiles(void)
  */
 {
 
-  cnh = readfits("results/seeingProfile.fits");
-  l0h = readfits("results/l0hProfile.fits");
-  vh = readfits("results/vhProfile.fits");
-  alt = readfits("results/altProfile.fits");
-  cnh0 = readfits("results/seeing.fits");
-  cnhg = readfits("results/groundSeeing.fits");
-  cnhalt = readfits("results/altSeeing.fits");
-  l0eff = readfits("results/effL0.fits");
-  l0g = readfits("results/groundL0.fits");
-  l0alt = readfits("results/altL0.fits");
-  v0 = readfits("results/effV0.fits");
-  v0g = readfits("results/groundV0.fits");
-  v0alt = readfits("results/altV0.fits");
+  cnh = readfits("results/Profiles/seeingProfile.fits");
+  l0h = readfits("results/Profiles/l0hProfile.fits");
+  vh = readfits("results/Profiles/vhProfile.fits");
+  alt = readfits("results/Profiles/altProfile.fits");
+  cnh0 = readfits("results/Profiles/seeing.fits");
+  cnhg = readfits("results/Profiles/groundSeeing.fits");
+  cnhalt = readfits("results/Profiles/altSeeing.fits");
+  l0eff = readfits("results/Profiles/effL0.fits");
+  l0g = readfits("results/Profiles/groundL0.fits");
+  l0alt = readfits("results/Profiles/altL0.fits");
+  v0 = readfits("results/Profiles/effV0.fits");
+  v0g = readfits("results/Profiles/groundV0.fits");
+  v0alt = readfits("results/Profiles/altV0.fits");
   
   if(0){
     //initialiazing vectors...
@@ -649,8 +979,8 @@ func plotProfiles(void)
 
     cnh     = 0.103/cnh^(-3/5.);
     dcnh    = 0.103*3/5.*dcnh/cnh^(2/5.); 
-    wa      = where(alt>=20);
-    alt(wa) = 20.;
+    //wa      = where(alt>=20);
+    //alt(wa) = 20.;
     w0 = where(l0h<=40);
     write,format="%.3g%s of jerk outer scale\n",100.*(1.- double(numberof(w0))/numberof(l0h)),"%s";
 
@@ -774,15 +1104,15 @@ func plotProfiles(void)
 |____/|_| \_\_____/_/   \_\_|\_\____/ \___/  \_/\_/  |_| \_|
                                                             
 */
-func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
-/* DOCUMENT eb = plotScriptErrorBreakdown("2013_09_17_onsky/","script293","results/");
+func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=,wb=)
+/* DOCUMENT plotScriptErrorBreakdown,"2013_09_17_onsky/","script293","results/Scripts/";
  */
 {
   local res;
   if(!redo)
     res = readfits(path_out + "scriptProcess_" + scriptsuffix +".fits",err=1);
   
-  include, "PRAC_config.i",1;
+  include, "pracConfig.i",1;
   dataDirRoot = dataDir + Dir;
   //takes all slopestl files
   pathstl = listVersion(dataDirRoot,"fits","slopestl");
@@ -793,41 +1123,45 @@ func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
     s_ir = s_tomo = s_noise = s_bw = s_fit = s_static = s_ncpa = s_ol = [];
     aomode = srsky = srmar = srpar = srborn  = mode = [];
     r0 = L0 = v =  h = ved1 = ved2 = ved3 = ved4 = ved5 = [];
-    cnh2 = alt2 = l0h2 = vh2 = []; PSF = array(0.,70,70,ntl);
+    cnh2 = alt2 = l0h2 = vh2 = [];
+    PSF = array(0.,128,128,ntl);
     res = array(pointer,24);
     
     for(j=1;j<=ntl;j++){
       timetl  = extractDate(pathstl(j));
       h       = grow(h,str2time(strpart(timetl,12:)));
-      tmp     = PRAC_main(timetl,Dir = Dir,budgetonly=1);
-      mode  = grow(mode,strchar(*tmp(1)));
+      tmp     = pracMain(timetl,Dir = Dir,budgetonly=1);
+      mode    = grow(mode,strchar(*tmp(1))(2));
       
-      PSF(,,j)  = *tmp(5);
+      PSF(,,j)  = (*tmp(6))(,,1);
       
-      p       = *tmp(4);
+      p       = *tmp(9);
+
       s_ir  = grow(s_ir,p(1));
       s_fit  = grow(s_fit,p(2));
       s_bw  = grow(s_bw,p(3));
       s_tomo  = grow(s_tomo,p(4));
-      s_alias  = grow(s_alias,p(5));
-      s_noise  = grow(s_noise,p(6));
-      s_ol  = grow(s_ol,p(7));
-      s_static = grow(s_static,p(8));
-      s_ncpa = grow(s_ncpa,p(9));
-      srsky = grow(srsky,p(10));
-      srmar = grow(srmar,p(11));
-      srpar = grow(srpar,p(12));
-      srborn = grow(srborn,p(13));
+      s_noise  = grow(s_noise,p(5));
+      s_alias  = grow(s_alias,p(6));
+      s_static = grow(s_static,p(7));
+      s_ncpa = grow(s_ncpa,115);//grow(s_ncpa,p(8));
+      s_ol  = grow(s_ol,p(9));
+      
+      p       = 100*(*tmp(11));
+      srsky = grow(srsky,p(1));
+      srmar = grow(srmar,p(3));
+      srpar = grow(srpar,p(4));
+      srborn = grow(srborn,p(5));
     
       r0 = grow(r0,(*tmp(2))(1));
       L0 = grow(L0,(*tmp(2))(2));
       v = grow(v,(*tmp(2))(3));
 
-      ved1 = grow(ved1,(*tmp(6))(1));
-      ved2 = grow(ved2,(*tmp(6))(2));
-      ved3 = grow(ved3,(*tmp(6))(3));
-      ved4 = grow(ved4,(*tmp(6))(4));
-      ved5 = grow(ved5,(*tmp(6))(5));
+      ved1 = grow(ved1,(*tmp(10))(1));
+      ved2 = grow(ved2,(*tmp(10))(2));
+      ved3 = grow(ved3,(*tmp(10))(3));
+      ved4 = grow(ved4,(*tmp(10))(4));
+      ved5 = grow(ved5,(*tmp(10))(5));
 
       cnh2 = grow(cnh2,(*tmp(3))(,1));
       alt2 = grow(alt2,(*tmp(3))(,2));
@@ -835,7 +1169,7 @@ func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
       vh2  = grow(vh2,(*tmp(3))(,4));
       
     }
-    res(1) = &mode;res(2) = &PSF;
+    res(1) = &strchar(mode);res(2) = &PSF;
     res(3) = &s_ir; res(4) = &s_tomo; res(5) = &s_alias; res(6) = &s_noise;
     res(7) = &s_bw;res(8) = &s_fit; res(9) = &s_ol;res(10) = &s_static;
     res(11) = &s_ncpa; res(12) = &srsky; res(13) = &srmar; res(14) = &srpar;res(15) = &srborn;
@@ -849,7 +1183,30 @@ func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
     writefits,path_out + "scriptProcess_" + scriptsuffix +".fits",res;
   }
 
+  ////////////
   //Displaying error breakdown
+  /////////////////////////////////////////////////
+
+  if(wb!=1){
+    c1 = "blue";
+    c2 = "black";
+    c3 = "red";
+    col1=[char(249)];
+    col2=[char(241)];
+    col3=[char(251)];
+  }else{
+    c1 = [96,96,96];
+    c2 = "black";
+    c3 = [128,128,128];
+    col1=[char(242)];
+    col2=[char(241)];
+    col3=[char(243)];
+  }
+  savedir = "/home/omartin/Documents/Articles/Canary_Phase_B/Figures/" + scriptsuffix +"/";
+  if(!direxist(savedir))
+    system,"mkdir " + savedir;
+
+  
   modes = strchar(*res(1));
   sir_1  = (*res(3))(1::3);sir_2  = (*res(3))(2::3);sir_3  = (*res(3))(3::3);
   stomo_1  = (*res(4))(1::3);stomo_2  = (*res(4))(2::3);stomo_3  = (*res(4))(3::3);
@@ -865,42 +1222,87 @@ func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
   y2 = [sqrt(avg(sir_2^2)),sqrt(avg(stomo_2^2)),sqrt(avg(salias_2^2)),sqrt(avg(snoise_2^2)),sqrt(avg(sbw_2^2)),sqrt(avg(sfit_2^2)),sqrt(avg(sol_2^2)),sqrt(avg(sstatic_2^2)),sqrt(avg(sncpa_2^2))];
   y3 = [sqrt(avg(sir_3^2)),sqrt(avg(stomo_3^2)),sqrt(avg(salias_3^2)),sqrt(avg(snoise_3^2)),sqrt(avg(sbw_3^2)),sqrt(avg(sfit_3^2)),sqrt(avg(sol_3^2)),sqrt(avg(sstatic_3^2)),sqrt(avg(sncpa_3^2))];
   
-  labs = ["!s_IR","!s_tomo","!s_alias","!s_n","!s_bw","!s_fit","!s_ol","!s_stat","!s_ncpa"];
-  winkill,0;window,0,style="aanda.gs",dpi=90;clr;
-  plotsBarDiagram,y1,y2=y2,y3=y3,labs,col1=[char(241)],col2=[char(242)],col3=[char(243)],title=0;
-  plt,modes(1),7,.8*max(y1(1),y2(1),y3(1)),tosys=1;
-  plt,modes(2),7,.7*max(y1(1),y2(1),y3(1)),tosys=1,color=[128,128,128];
-  plt,modes(3),7,.6*max(y1(1),y2(1),y3(1)),tosys=1,color=[64,64,64];
-  pdf,"/home/omartin/Documents/Articles/Canary_Phase_B/Figures/" + scriptsuffix +"/" +   scriptsuffix + "_budget.pdf";
+  labs = ["!s_!e-IT","!s_Tomography","!s_Aliasing","!s_Noise","!s_ServoLag","!s_Fitting","!s_Go-to","!s_Static","!s_ncpa"];
+  winkill,0;window,0,style="aanda.gs",dpi=90;clr;gridxy,1,1;
+  step=2;
+  plotsBarDiagram,y1,y2=y2,y3=y3,labs,col1=col1,col2=col2,col3=col3,title=0,step=step;
+  plt,modes(1),7*step,.8*max(y1(1),y2(1),y3(1)),tosys=1,color=c1;
+  plt,modes(2),7*step,.7*max(y1(1),y2(1),y3(1)),tosys=1,color=c2;
+  plt,modes(3),7*step,.6*max(y1(1),y2(1),y3(1)),tosys=1,color=c3;
+  xytitles," ","Wave Front Error [nm rms]";
+  pdf,savedir + scriptsuffix + "_budget.pdf";
 
+  /////////
   //Displaying averaged PSF
+  /////////////////////////////////////////////////
 
+  
   PSF1 = ((*res(2))(,,1::3))(,,avg);
   PSF2 = ((*res(2))(,,2::3))(,,avg);
   PSF3 = ((*res(2))(,,3::3))(,,avg);
   a=3. ;
   cutmax = (max(max(PSF1),max(PSF2),max(PSF3)))^(1./a);
-  box = 70; uz = 0.0297949; 
+  box = dimsof(PSF1)(0); uz = 0.0297949; 
 
-  window,1;clr;palette,"gray.gp";
+  window,1;clr;//palette,"gray.gp";
   pli,(abs(PSF1))^(1./a),-box*uz/2,-box*uz/2,box*uz/2,box*uz/2,cmin = 0,cmax = cutmax;
   xytitles,"Arcsec","Arcsec";
-  pltitle,"On-sky PSF in " + modes(1) + " with SR = " + var2str(arrondi(100*max(PSF1),1)) + "%";
-  pdf,"/home/omartin/Documents/Articles/Canary_Phase_B/Figures/" + scriptsuffix + "/"+ scriptsuffix +"_" + modes(1)+ "_psf.pdf";
+  pltitle,"On-sky PSF in " + modes(1) + "\n Strehl = " + var2str(arrondi(100*max(PSF1),1)) + "%";
+  pdf,savedir+ scriptsuffix +"_" + modes(1)+ "_psf.pdf";
 
-  window,2;clr;palette,"gray.gp";
+  window,2;clr;//palette,"gray.gp";
   pli,(abs(PSF2))^(1./a),-box*uz/2,-box*uz/2,box*uz/2,box*uz/2,cmin = 0,cmax = cutmax;
   xytitles,"Arcsec","Arcsec";
-  pltitle,"On-sky PSF in " + modes(2) + " with SR = " + var2str(arrondi(100*max(PSF2),1)) + "%";
-  pdf,"/home/omartin/Documents/Articles/Canary_Phase_B/Figures/" + scriptsuffix + "/" + scriptsuffix +"_" + modes(2)+ "_psf.pdf";
+  pltitle,"On-sky PSF in " + modes(2) + "\n Strehl = " + var2str(arrondi(100*max(PSF2),1)) + "%";
+  pdf,savedir + scriptsuffix +"_" + modes(2)+ "_psf.pdf";
 
-  window,3;clr;palette,"gray.gp";
+  window,3;clr;//palette,"gray.gp";
   pli,(abs(PSF3))^(1./a),-box*uz/2,-box*uz/2,box*uz/2,box*uz/2,cmin = 0,cmax = cutmax;
   xytitles,"Arcsec","Arcsec";
-  pltitle,"On-sky PSF in " + modes(3) + " with SR = " + var2str(arrondi(100*max(PSF3),1)) + " %";
-  pdf,"/home/omartin/Documents/Articles/Canary_Phase_B/Figures/" + scriptsuffix + "/"+ scriptsuffix +"_" + modes(3)+ "_psf.pdf";
+  pltitle,"On-sky PSF in " + modes(3) + "\n Strehl = " + var2str(arrondi(100*max(PSF3),1)) + " %";
+  pdf,savedir+ scriptsuffix +"_" + modes(3)+ "_psf.pdf";
 
+  /////////
+  //Displaying circular average of PSF/OTF
+  /////////////////////////////////////////////////
+  /*
+  winkill,7;window,7,dpi=90,style="aanda.gs";clr;gridxy,1,1;//palette,"gray.gp";
+  //plg,log(circularAveragePsf(PSFtel)),1e3*(indgen(box/2)-1)*uz,type=2;
+  plg,log(abs(circularAveragePsf(PSF1))),1e3*(indgen(box/2)-1)*uz,color=c1;
+  plg,log(abs(circularAveragePsf(PSF2))),1e3*(indgen(box/2)-1)*uz,color=c2;
+  plg,log(abs(circularAveragePsf(PSF3))),1e3*(indgen(box/2)-1)*uz,color=c3;
+  //plt,"A: Perfect telescope PSF",600,-1,tosys=1;
+  m = log(max(max(PSF1),max(PSF2),max(PSF3)))
+    plt,"A: " + modes(1) +" PSF",100,-8,tosys=1,color=c1;
+  plt,"B: " +modes(2) + " PSF",100,-10,tosys=1,color=c2;
+  plt,"C: " +modes(3) + " PSF",100,-12,tosys=1,color=c3;
+  plt,scriptsuffix,100,-14,tosys=1;
+  xytitles,"Angular separation [mas]","Normalized PSF (log scale)";
+  limits,-10,1000;
+  pdf,savedir + scriptsuffix +"_circPSF.pdf";
+
+  winkill,8;window,8,dpi=90,style="aanda.gs";clr;gridxy,1,1;//palette,"gray.gp";
+  OTF1 = roll(fft(roll(PSF1)).re);
+  OTF2 = roll(fft(roll(PSF2)).re);
+  OTF3 = roll(fft(roll(PSF3)).re);
+  dl =  ((indgen(box/2)-1) * uz*2);
+  plg,log(abs(circularAveragePsf(OTF1/max(OTF1)))),dl,color=c1;
+  plg,log(abs(circularAveragePsf(OTF2/max(OTF2)))),dl,color=c2;
+  plg,log(abs(circularAveragePsf(OTF3/max(OTF3)))),dl,color=c3;
+  //plt,"A: Perfect telescope PSF",600,-1,tosys=1;
+  plt,"A: " +modes(1) +" OTF",.1,-4,tosys=1,color=c1;
+  plt,"B: " +modes(2) + " OTF",.1,-5,tosys=1,color=c2;
+  plt,"C: " +modes(3) + " OTF",.1,-6,tosys=1,color=c3;
+  plt,scriptsuffix,.1,-7,tosys=1;
+  xytitles,"Normalized Frequency [!r/!l units]","Normalized OTF (log scale)";
+  limits,-.1,1.3;range,-10,0;
+  pdf,savedir + scriptsuffix +"_circOTF.pdf";
+  */
+  
+  ////////////
   //Displaying Strehl ratios versus time
+  /////////////////////////////////////////////////
+
   w1 = where(modes == modes(1))
   w2 = where(modes == modes(2));
   w3 = where(modes == modes(3));
@@ -936,28 +1338,38 @@ func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
 
   SRanal1 = SRpar1(sort(h1));SRanal2 = SRpar2(sort(h2));SRanal3 = SRpar3(sort(h3));
   
-  winkill,4;window,4,style="aanda.gs",dpi=90;clr;
-  plmk, SRsky1(sort(h1)),h1(sort(h1)),msize=.4,marker=3,width=10; plg,SRsky1(sort(h1)),h1(sort(h1)),marks=0;
-  plmk, SRanal1,h1(sort(h1)),msize=.4,marker=3; plg,SRanal1,h1(sort(h1)),marks=0,type=2;
+  winkill,4;window,4,style="aanda.gs",dpi=90;clr;gridxy,1,1;
+  plmk, SRsky1(sort(h1)),h1(sort(h1)),msize=.4,marker=3,width=10,color=c1;
+  plg,SRsky1(sort(h1)),h1(sort(h1)),marks=0,color=c1;
+  plmk, SRanal1,h1(sort(h1)),msize=.4,marker=3,color=c1;
+  plg,SRanal1,h1(sort(h1)),marks=0,type=2,color=c1;
 
-  plmk, SRsky2(sort(h2)),h2(sort(h2)),msize=.4,marker=4,width=10; plg,SRsky2(sort(h2)),h2(sort(h2)),marks=0;
-  plmk, SRanal2,h2(sort(h2)),msize=.4,marker=4; plg,SRanal2,h2(sort(h2)),marks=0,type=2;
+  plmk, SRsky2(sort(h2)),h2(sort(h2)),msize=.4,marker=4,width=10,color=c2;
+  plg,SRsky2(sort(h2)),h2(sort(h2)),marks=0,color=c2;
+  plmk, SRanal2,h2(sort(h2)),msize=.4,marker=4,color=c2;
+  plg,SRanal2,h2(sort(h2)),marks=0,type=2,color=c2;
 
-  plmk, SRsky3(sort(h3)),h3(sort(h3)),msize=.4,marker=6,width=10; plg,SRsky3(sort(h3)),h3(sort(h3)),marks=0;
-  plmk, SRanal3,h3(sort(h3)),msize=.4,marker=6; plg,SRanal3,h3(sort(h3)),marks=0,type=2;
+  plmk, SRsky3(sort(h3)),h3(sort(h3)),msize=.4,marker=6,width=10,color=c3;
+  plg,  SRsky3(sort(h3)),h3(sort(h3)),marks=0,color=c3;
+  plmk, SRanal3,h3(sort(h3)),msize=.4,marker=6,color=c3;
+  plg,  SRanal3,h3(sort(h3)),marks=0,type=2,color=c3;
   
   range,0,50;
-  xytitles,"Local time (hour)","On-sky SR (%)";
-  mm = min(grow(h1,h2,h3))
-  plt,"Triangles: " + modes(1),mm,48,tosys=1;
-  plt,"Circles: " + modes(2),mm,45,tosys=1;
-  plt,"Crosses: " + modes(3),mm,42,tosys=1;
-  plt,"Plain line: on-sky SR",mm+.05,48,tosys=1;
-  plt,"Dash line: analytic SR",mm+.05,45,tosys=1;
-  plt,"Script " + strpart(scriptsuffix,7:),mm+.05,42,tosys=1;
-  limits,mm-0.01,mm+0.11;
-  pdf,"/home/omartin/Documents/Articles/Canary_Phase_B/Figures/"+ scriptsuffix + "/" + scriptsuffix +"_srvshour.pdf";
+  xytitles,"Local time [hour]","H-band SR [%]";
+  mm = min(grow(h1,h2,h3));
+  mn = max(grow(h1,h2,h3));
+  plt,"Triangles: " + modes(1),mm,48,tosys=1,color=c1;
+  plt,"Circles: " + modes(2),mm,45,tosys=1,color=c2;
+  plt,"Crosses: " + modes(3),mm,42,tosys=1,color=c3;
+  plt,"Solid line: on-sky SR",mn-.05,48,tosys=1;
+  plt,"Dash  line: analytic SR",mn-.05,45,tosys=1;
+  plt,"Script " + strpart(scriptsuffix,7:),mn-.05,42,tosys=1;
+  limits,mm-0.01,mn+0.01;
+  pdf,savedir + scriptsuffix +"_srvshour.pdf";
+
+  //////////
   //Displaying VED
+  /////////////////////////////////////////////////
 
    cnh = [median((*res(21))(1::5)),median((*res(21))(2::5)),median((*res(21))(3::5)),median((*res(21))(4::5)),median((*res(21))(5::5))];
    alt = [median((*res(22))(1::5)),median((*res(22))(2::5)),median((*res(22))(3::5)),median((*res(22))(4::5)),median((*res(22))(5::5))]/1000.;
@@ -972,46 +1384,46 @@ func plotScriptErrorBreakdown(Dir,scriptsuffix,path_out,redo=)
     ved2 = sqrt(((*res(20))(w3,)^2)(avg,));
    
   
-    winkill,5;window,5,style="aanda.gs",dpi=90;clr;
-    thick=.3;
+    winkill,5;window,5,style="aanda.gs",dpi=90;clr;gridxy,1,1;
+    thick=.1;
     for(j=1; j<=5; j++){
       d = 0.5*(0.5-thick);
       d = 2*thick;
-      plfp, [char(242)],[0,1,1,0]*ved1(j),([1,1,1,1]*alt(j) -d/2) + [-1,-1,1,1]*thick,[4];
-      plfp, [char(244)],[0,1,1,0]*ved2(j),([1,1,1,1]*alt(j) +d/2) + [-1,-1,1,1]*thick,[4];
+      plfp, col2,[0,1,1,0]*ved1(j),([1,1,1,1]*alt(j) -d/2) + [-1,-1,1,1]*thick,[4];
+      plfp, col3,[0,1,1,0]*ved2(j),([1,1,1,1]*alt(j) +d/2) + [-1,-1,1,1]*thick,[4];
     }
 
-    xytitles,"Altitude (km)","VED (nm)";
+    xytitles,"Altitude [km]","VED [nm]";
     ml = max(grow(ved1,ved2));
-    plt,m(1),1,ml*0.9,tosys=1,color=[128,128,128];
-    plt,m(2),1,ml*0.8,tosys=1,color=[64,64,64];
+    plt,m(1),1,ml*0.9,tosys=1,color=c2;
+    plt,m(2),1,ml*0.8,tosys=1,color=c3;
     limits,min(alt)-1,max(max(alt)+1,15);
     range,0,ml*1.05;
-    pdf,"/home/omartin/Documents/Articles/Canary_Phase_B/Figures/"+ scriptsuffix + "/" + scriptsuffix + "_VED.pdf";
+    pdf,savedir + scriptsuffix + "_VED.pdf";
   
-  
-    //Displaying profiles
-   
+    ////////////
+    // Displaying profiles
+    /////////////////////////////////////////////////
     
-    winkill,6;window,6,style="aanda.gs",dpi=90;clr;
+    winkill,6;window,6,style="aanda.gs",dpi=90;clr;gridxy,1,1;
     wmoao = where(modes == "MOAO4L3N");
     suffcnh = readFitsKey(pathstl(wmoao(1)),"CN2H");
     ptrcnh  = restorefits("tomoparam",suffcnh);
-    displayLayers,cnh,alt*1000,col=[char(242)],thick=.4,percent=1;
-    displayLayers,-(*ptrcnh(2)),*ptrcnh(3),col=[char(241)],percent=1;
+    displayLayers,cnh,alt*1000,col=col3,thick=.2,percent=1;
+    displayLayers,-(*ptrcnh(2)),*ptrcnh(3),col=[char(241)],percent=1,thick=.2;
     limits,-100,100;
-    range,-1,20;
-    plt,"Retrieved profile\n on-sky",-90,15,tosys=1;
+    range,-1,22;
+    plt,"Used profile\n to compute R",-90,15,tosys=1;
     plt,"Average profile\n during the script",20,15,tosys=1,color=[128,128,128];
-    plt,"Script " + strpart(scriptsuffix,7:),-10,18,tosys=1;
-    pdf,"/home/omartin/Documents/Articles/Canary_Phase_B/Figures/"+ scriptsuffix + "/" + scriptsuffix + "_profiles.pdf";
+    plt,"Script " + strpart(scriptsuffix,7:),-10,20,tosys=1;
+    pdf,savedir + scriptsuffix + "_profiles.pdf";
   }
   //gives statistics on turbulence
   //r0
   r0 = avg((*res(16))^(-5/3.))^(-3/5.);
   cnh2 = cnh*r0^(-5/3.)/sum(cnh);
-  r0g = sum(cnh2(where(alt <= 0.1)))^(-3/5.);
-  r0a = sum(cnh2(where(alt >0.1)))^(-3/5.);
+  r0g = sum(cnh2(where(alt <= 1)))^(-3/5.);
+  r0a = sum(cnh2(where(alt >1)))^(-3/5.);
   //seeing
   seeing = 0.103/r0;
   sg    = 0.103/r0g;
@@ -1169,3 +1581,4 @@ func skyPerformance(aomode,all=)
   limits,0,2;
   range,0,100;
 }
+

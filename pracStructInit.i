@@ -17,7 +17,15 @@ struct asterism_struct{
   double photometry;
   magnitude_struct magnitude(nngs);
 };
-
+struct src_struct{
+    double lambda;
+    double magnitude;
+    double zeroPoint;
+    double zenith;
+    double azimuth;
+    double location(2);
+}
+   
 struct atm_struct{
   double  lambda;
   double  r0;
@@ -25,32 +33,35 @@ struct atm_struct{
   double  v;
   double  dir;
   int     nLayers;
-  double  cnh(nl);
-  double  altitude(nl);
-  double  l0h(nl);
-  double  vh(nl);
-  double  dirh(nl);
+  double  cnh(NL);
+  double  altitude(NL);
+  double  l0h(NL);
+  double  vh(NL);
+  double  dirh(NL);
 };
 
 struct telescope_struct{
-  double diam;
-  double obs;
-  double airmass;
-  double zenith;
-  double azimuth;
-  double plateScale;
-  long   nPixels;
-  double fourierPixSize;
-  double pixSize;
-  double foV;
-  double pitch;
-  long   pitchSize;
-  double lambdaPerFov;
-  double dPerFov;
-  double airyPeak;
-  double aera;
-  double aeraInPix;
+  double  diam;
+  double  obs;
+  double  airmass;
+  double  zenith;
+  double  azimuth;
+  double  plateScale;
+  long    nPixels;
+  double  fourierPixSize;
+  double  pixSize;
+  double  foV;
+  double  pitch;
+  long    pitchSize;
+  double  lambdaPerFov;
+  double  dPerFov;
+  double  airyPeak;
+  double  aera;
+  double  aeraInPix;
+  pointer pupil;
+  int     nTimes 
 };
+
 
 struct rtc_struct{
   int      nFrames; 
@@ -75,12 +86,15 @@ struct rtc_struct{
   pointer  skyProfile;
   pointer  mi;
   pointer  mc;
+  pointer  mcsky;
+  pointer  misky;
   
   pointer  slopes_res;
   pointer  slopes_dis;
   pointer  volts;
+  pointer  offsetDM;
+  pointer  refSlopes;
 };
-
 struct wfs_struct{
   double x; // This WFS guide star x-position in arcsec. Optional [0,0]
   double y; // This WFS guide star y-position in arcsec. Optional [0,0]
@@ -105,9 +119,11 @@ struct dm_struct {
   double  pitch;
   pointer csX;
   pointer csY;
-  pointer csI;  // indices of actuators = [3,4,5,6, 10,11,12,13,14,15, 17 ... ] in a Ndiam X Ndiam image
+  pointer csI;
+  // indices of actuators = [3,4,5,6, 10,11,12,13,14,15, 17 ... ] in a Ndiam X Ndiam image
   double  x0;
   double  couplage;
+  pointer modes;
 };
 
 struct cam_struct{
@@ -124,6 +140,7 @@ struct cam_struct{
   pointer deadPixIndex;
   int     nPixelsCropped;
   double  exposureTime;
+  double  medianLambda;
 };
 
 struct sys_struct{
@@ -143,9 +160,9 @@ struct learn_struct{
   pointer transformationMatrix;
   int     runLearnTwoSteps;
   int     nl;
-  double  cnh(nl);
-  double  altitude(nl);
-  double  l0h(nl);
+  double  cnh(NL);
+  double  altitude(NL);
+  double  l0h(NL);
   double  tracking(3);
   double  xshift(nwfs);
   double  yshift(nwfs);
@@ -155,9 +172,9 @@ struct learn_struct{
 };
 
 struct learnfit_struct{
-  int     cnh(nl);
-  int     altitude(nl);
-  int     l0h(nl);
+  int     cnh(NL);
+  int     altitude(NL);
+  int     l0h(NL);
   int     tracking(3);
   int     xshift(nwfs);
   int     yshift(nwfs);
@@ -186,7 +203,7 @@ struct budget_struct{
   double  alias;
   double  noise;
   double  static;
-  double  ved(nl);
+  double  ved(NL);
   double  ol;
   double  ncpa;
   double  vib
@@ -219,8 +236,8 @@ struct psf_struct{
   pointer diff;
   pointer ncpa;
   pointer ncpa_fit;
-  double  skyMoffatProf(3);
-  double  resMoffatProf(3);
+  double  moffat_sky(5);
+  double  moffat_res(5);
   pointer EE_res;
   pointer EE_sky;
   double  SR_res;
@@ -237,6 +254,5 @@ struct psf_struct{
   double  skyWings;
   double  resWings;
   double  FWHM_res;
-  double  FWHM_sky;
-  
+  double  FWHM_sky;  
 }
